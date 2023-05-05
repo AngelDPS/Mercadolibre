@@ -78,13 +78,15 @@ class MeLiConexion(OAuth2Session):
     def request(
         self,
         method,
-        MeLiResource,
+        meLi_resource,
         data=None,
         headers=None,
         withhold_token=False,
         **kwargs
     ):
-        url = f'https://api.mercadolibre.com/{MeLiResource}'
+        meLi_api = 'https://api.mercadolibre.com/'
+        url = (meLi_api + meLi_resource
+               if meLi_api not in meLi_resource else meLi_resource)
         response = super().request(method,
                                    url,
                                    data,
