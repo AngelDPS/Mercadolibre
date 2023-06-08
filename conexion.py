@@ -1,14 +1,20 @@
+from meli.dynamodb import (
+    obtener_MeliAccessToken,
+    guardar_MeliAccessToken,
+    obtener_MeliClientCredentials
+)
 from requests_oauthlib import OAuth2Session
 from logging import getLogger
 import json
 
-oauth_logger = getLogger('request_oauthlib')
+# oauth_logger = getLogger('request_oauthlib')
 logger = getLogger(__name__)
 
 
 class MeLiConexion(OAuth2Session):
     token_url = r"https://api.mercadolibre.com/oauth/token"
     codigoCompania: str
+    codigoTienda: str
 
     def token_saver(self, token: dict):
         tokenFilePath = f'BD/{self.codigoCompania}/token.json'
@@ -36,6 +42,10 @@ class MeLiConexion(OAuth2Session):
             logger.debug(f"{config = }")
             return config
 
+    def token_updater(self, token: str):
+        guardar_MeliAccessToken(self. codigoCompania, self.codigoTienda,
+                                token)
+
     def _fetchToken(self):
         authorization_url, state = self.authorization_url(
             'https://auth.mercadolibre.com.ve/authorization'
@@ -48,25 +58,23 @@ class MeLiConexion(OAuth2Session):
             include_client_id=True,
             client_secret=self.auto_refresh_kwargs['client_secret']
         )
-        self.token_saver(self.token)
+        self.token_updater(self.token)
 
-    def __init__(self, codigoCompania: str, **kwargs):
+    def __init__(self, codigoCompania: str, codigoTienda: str, **kwargs):
         self.codigoCompania = codigoCompania
-        config = self.config_reader()
-        extra = {
-            'client_id': config['client_id'],
-            'client_secret': config['client_secret']
-        }
-        super().__init__(config['client_id'],
-                         redirect_uri=config['redirect_uri'],
+        self.codigoTienda = codigoTienda
+        client = obtener_MeliClientCredentials(codigoCompania, codigoTienda)
+        super().__init__(client['client_id'],
+                         # redirect_uri=config['redirect_uri'],
                          auto_refresh_url=self.token_url,
-                         auto_refresh_kwargs=extra,
-                         token_updater=self.token_saver,
+                         auto_refresh_kwargs=client,
+                         token_updater=self.token_updater,
                          **kwargs)
         try:
-            self.token = self.token_reader()
-        except FileNotFoundError:
-            self.warning("No se encontró el archivo con el token."
+            self.token = obtener_MeliAccessToken(self.codigoCompania,
+                                                 self.codigoTienda)
+        except KeyError:
+            self.warning("No se pudo obtener el refresh token."
                          "Se intentará generar un token nuevo.")
             if not self.redirect_uri:
                 raise ValueError("En caso de no haber un token "
@@ -98,9 +106,3 @@ class MeLiConexion(OAuth2Session):
                      f'\t{response.reason}\nContenido:\n{response.text}'
                      f'\nHeaders:\n{response.headers}')
         return response
-
-
-if __name__ == "__main__":
-    session = MeLiConexion('ADPS')
-    r = session.get('users/me')
-    print(r.json())
