@@ -1,4 +1,4 @@
-from meli.dynamodb import (
+from meli.libs.dynamodb import (
     obtener_MeliAccessToken,
     guardar_MeliAccessToken,
     obtener_MeliClientCredentials

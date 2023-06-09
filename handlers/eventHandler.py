@@ -1,5 +1,5 @@
 from boto3.dynamodb.types import TypeDeserializer
-from meli.handlers.articuloHandler import ArticuloHandler
+from meli.handlers.articuloHandler import ArticuloHandler as meli_ArtHandler
 from logging import getLogger
 
 logger = getLogger(__name__)
@@ -90,9 +90,9 @@ class EventHandler:
         """
         self.eventName = evento['eventName']
         self.NewImage, self.OldImage = EventHandler.formatearEvento(evento)
-        self.handler = self.obtenerHandler()
 
-    def obtenerHandler(self) -> ArticuloHandler:
+    @property
+    def handlers(self):
         """Obtiene un manipulador según el tipo de registro que accionó el
         evento.
 
@@ -100,16 +100,25 @@ class EventHandler:
             ProductoHandler: El manipulador adecuado para el evento del
             registro.
         """
+        art_handlers = []
+        lin_handlers = []
+        tie_handlers = []
+        if (self.NewImage.meli_habilitado or
+                self.OldImage.meli_habilitado):
+            art_handlers.append(meli_ArtHandler)
         try:
-            handler = {
-                'articulos': ArticuloHandler
-                # 'lineas': ColeccionHandler
-                # 'tiendas': SucursalHandler
+            handlers = {
+                'articulos': art_handlers,
+                'lineas': lin_handlers,
+                'tiendas': tie_handlers
             }
-            handler = handler[self.NewImage['entity']]
+            handlers = self.handlers[self.NewImage['entity']]
+            if not handlers:
+                raise KeyError
             logger.info("El evento corresponde a una entidad de "
-                        f"{self.NewImage['entity']}.")
-            return handler(self)
+                        f"{self.NewImage['entity']} y será procesado por "
+                        f"los handlers {handlers}.")
+            return handlers
         except KeyError as err:
             msg = ("El evento corresponde a una entidad de "
                    f"{self.NewImage['entity']}, cuyo proceso no está "
@@ -126,8 +135,10 @@ class EventHandler:
             acción y el resultado obtenido.
         """
         try:
-            r = self.handler.ejecutar()
-            return {"status": "OK", "respuesta": r}
+            r = []
+            for handler in self.handlers:
+                r.append(handler(self).ejecutar())
+            return {"status": "OK", "respuestas": r}
         except Exception:
             logger.exception("Ocurrió un error ejecutando el evento.")
             raise

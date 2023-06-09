@@ -12,12 +12,18 @@ from meli.conexion import MeLiConexion
 from os import environ
 from io import BytesIO
 from re import search
+from enum import Enum
 import requests
 import boto3
 
 logger = getLogger(__name__)
 s3_client = boto3.client('s3', region_name=environ.get("AWS_REGION"),
                          config=boto3.session.Config(signature_version='s3v4'))
+
+
+class Habilitado(Enum):
+    ACTIVE = 1
+    PAUSED = 0
 
 
 class ArticuloHandler:
@@ -69,9 +75,10 @@ class ArticuloHandler:
             setattr(self, label,
                     Marticulo.parse_obj(getattr(evento, label)))
             getattr(self, label).precio = getattr(evento, label)[campo_precio]
-            getattr(self, label).habilitado = (
-                getattr(self, label).habilitado.name
-            )
+            getattr(self, label).habilitado = Habilitado(
+                getattr(self, label).habilitado and
+                getattr(self, label).meli_habilitado
+            ).name.lower()
         self.cambios = Marticulo.parse_obj(
             evento.obtenerCambios(self.NewImage, self.OldImage)
         )
@@ -121,10 +128,14 @@ class ArticuloHandler:
                 return None
 
     def _crear(self, articuloInput: MArticulo_input):
-        return {
+        id_dict = {
             'articulo': self.session.post('items',
                                           json=articuloInput).json()["id"]
         }
+        self.session.post(
+            f'items/{id_dict["id"]}/description',
+            json={'plain_text': articuloInput.descripcion})
+        return id_dict
 
     def crear(self) -> list[str]:
         """Función dedicada a crear un producto en Shopify dada
@@ -180,7 +191,7 @@ class ArticuloHandler:
             if self.eventName == "INSERT":
                 respuesta = self.crear()
             elif self.cambios.dict(exclude_none=True, exclude_unset=True):
-                if self.NewImage.shopifyGID:
+                if self.NewImage.meliID:
                     respuesta = self.modificar()
                 else:
                     logger.warning("En el evento no se encontró el GID de "

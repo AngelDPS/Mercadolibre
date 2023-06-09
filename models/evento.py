@@ -1,17 +1,11 @@
 from pydantic import BaseModel as PydanticBaseModel, Field
 from decimal import Decimal
-from enum import Enum
 
 
 class BaseModel(PydanticBaseModel):
     class Config:
         allow_population_by_field_name = True
         anystr_strip_whitespace = True
-
-
-class Habilitado(Enum):
-    ARCHIVED = 0
-    ACTIVE = 1
 
 
 class Marticulo(BaseModel):
@@ -27,8 +21,8 @@ class Marticulo(BaseModel):
     codigo_barra: str | None
     referencia: str | None = None
     marca: str | None
-    meli_habilitado: bool | None = None
-    meli_descripcion: str | None = None
-    habilitado: Habilitado | None | str = Field(None, alias='status')
-    # imagen_url: list[str] | None = None
+    meli_habilitado: bool = False
+    meli_descripcion: str | None
+    habilitado: bool | None | str = Field(None, alias='status')
+    imagen_url: list[str] | None = None
     # cobra_impuesto: bool = Field(False, alias='taxable')

@@ -1,18 +1,18 @@
 from typing import Any
 from aws_lambda_powertools import Logger
+from os import environ
 from meli.libs.util import obtener_codigo
-from meli.handlers.eventHandler import EventHandler
+from aws_lambda_powertools.utilities import parameters
+# Obtiene las variables de entorno
+environ |= parameters.get_parameter(
+    "/TestingFucntion/meli", transform="json", max_age=300
+)
 from meli.libs.sqs import (
     process_messages,
     procesar_entidades_repetidas,
     delete_message
 )
-from aws_lambda_powertools.utilities import parameters
-from os import environ
-# Obtiene las variables de entorno
-environ |= parameters.get_parameter(
-    "/TestingFucntion/meli", transform="json", max_age=300
-)
+from meli.handlers.eventHandler import EventHandler
 
 logger = Logger(service="meli")
 
@@ -66,12 +66,17 @@ def event_handler(event: list[dict], context: Any) -> list[dict[str, str]]:
             for EV in EVs:
                 r.append(EventHandler(EV).ejecutar())
                 logger.debug(r[-1])
+        except NotImplementedError:
+            logger.warning("La acción requerida no está implementada y se "
+                           "ignorará el evento.")
+            continue
         except Exception as err:
             mensaje = (f"Ocurrió un error manejado el evento:\n{EV}."
                        f"Se levantó la excepción '{err}'.")
             logger.exception(mensaje)
             if codigo_actual == codigo:
                 raise Exception(mensaje) from err
+            continue
         else:
             if ID:
                 delete_message(ID)
