@@ -1,4 +1,4 @@
-import meli.libs.dynamodb as dynamodb
+from meli.libs.dynamodb import guardar_MeliIdArticulo
 from logging import getLogger
 from meli.models.articulo import (
     MArticulo_input,
@@ -10,11 +10,10 @@ from meli.models.articulo import (
 from meli.models.evento import Marticulo
 from meli.conexion import MeLiConexion
 from os import environ
-from io import BytesIO
 from re import search
-from enum import Enum
 import requests
 import boto3
+from enum import Enum
 
 logger = getLogger(__name__)
 s3_client = boto3.client('s3', region_name=environ.get("AWS_REGION"),
@@ -33,7 +32,7 @@ class ArticuloHandler:
         información guardada en la instancia.
         """
         logger.debug(f"MeLi ID de artículo: {self.NewImage.meliID}")
-        dynamodb.guardar_MeliIdArticulo(
+        guardar_MeliIdArticulo(
             PK=self.NewImage.PK,
             SK=self.NewImage.SK,
             ID=self.NewImage.meliID
@@ -82,36 +81,35 @@ class ArticuloHandler:
         self.cambios = Marticulo.parse_obj(
             evento.obtenerCambios(self.NewImage, self.OldImage)
         )
-        self.session = MeLiConexion(self.NewImage.codigoCompania)
+        self.session = MeLiConexion(self.NewImage.codigoCompania,
+                                    self.NewImage.codigoTienda)
 
     @staticmethod
-    def _procesarImagen(file: str):
-        pattern = r"(?P<fname>\w*\.(?P<ftype>jpg|jpeg|png|gif|webp))$"
-        match = search(pattern, file)
-        if not match:
+    def _procesarImagen(fname: str):
+        pattern = r"\.(jpg|jpeg|png|gif|webp)$"
+        try:
+            fextension = search(pattern, fname)[1]
+        except IndexError or TypeError:
             raise ValueError("El tipo de archivo usado no tiene soporte. "
                              "Tipos de archivo válidos son "
                              "[jpg, jpeg, png, gif, webp].")
+        mime_type = ("image/jpeg" if fextension == "jpg"
+                     else f"image/{fextension}")
         url = s3_client.generate_presigned_url(
             'get_object',
             Params={'Bucket': environ.get("BUCKET_NAME"),
-                    'Key': f"imagenes/{file}"},
+                    'Key': f"imagenes/{fname}"},
             ExpiresIn=3600
         )
-        imagen = BytesIO(requests.get(url).content)
-        fname = match["fname"]
-        mime_type = ("image/jpeg" if match['ftype'] == "jpg"
-                     else f"image/{match['ftype']}")
-        return fname, imagen, mime_type
+        # url = f"http://mla-s2-p.mlstatic.com/{fname}"
+        imagen = requests.get(url).content
+        return {'file': (fname, imagen, mime_type)}
 
     def _cargarImagen(self, file):
         try:
-            files = {'file': self._procesarImagen(file)}
+            files = self._procesarImagen(file)
             r = self.session.post('pictures/items/upload', files=files)
-            logger.debug(r.text)
             imgId = r.json()['id']
-            self.session.post(f'items/{self.NewImage.meliID}/pictures',
-                              json={'id': imgId})
             return imgId
         except ValueError as err:
             logger.exception(err)
@@ -128,13 +126,16 @@ class ArticuloHandler:
                 return None
 
     def _crear(self, articuloInput: MArticulo_input):
+        response = self.session.post(
+            'items',
+            json=articuloInput.dict(exclude_none=True)
+        )
         id_dict = {
-            'articulo': self.session.post('items',
-                                          json=articuloInput).json()["id"]
+            'articulo': response.json()['id']
         }
         self.session.post(
-            f'items/{id_dict["id"]}/description',
-            json={'plain_text': articuloInput.descripcion})
+            f'items/{id_dict["articulo"]}/description',
+            json={'plain_text': self.NewImage.meli_descripcion})
         return id_dict
 
     def crear(self) -> list[str]:
@@ -155,6 +156,10 @@ class ArticuloHandler:
             marca = Attributes(
                 id="brand", value_name=self.NewImage.marca
             )
+            self.NewImage.meliID = {'imagenes': {
+                img: self._cargarImagen(img)
+                for img in self.NewImage.imagen_url
+            }}
             articuloInput = MArticulo_input(
                 **self.NewImage.dict(by_alias=True,
                                      exclude_none=True),
@@ -162,16 +167,15 @@ class ArticuloHandler:
                                     - self.NewImage.stock_com),
                 listing_type_id=environ["MELI_TIPO_PUB"],
                 sale_terms=None,
-                pictures=None,
+                pictures=[
+                    {'id': imgID}
+                    for imgID in self.NewImage.meliID['imagenes'].values()
+                ],
                 attributes=[codigo_barra, sku, marca],
                 shipping=Shipping()
             )
-            self.NewImage.meliID = self._crear(articuloInput)
-            self.NewImage.meliID["imagenes"] = {
-                img: self._cargarImagen(img)
-                for img in self.NewImage.imagen_url
-            }
-            self.actualizarGidBD()
+            self.NewImage.meliID |= self._crear(articuloInput)
+            self.actualizarIdBD()
             return ["Producto creado!"]
         except Exception:
             logger.exception("No fue posible crear el producto.")

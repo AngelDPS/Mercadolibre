@@ -1,11 +1,13 @@
 import boto3
 from botocore.exceptions import ClientError
 from os import environ
+from logging import getLogger
 
 dynamodb = boto3.resource("dynamodb")
 # TODO: Aquí se obtiene y usa el parámetro de configuración para la base de
 # datos de DynamoDB.
 tabla = dynamodb.Table(environ["DYNAMODB_TABLE"])
+logger = getLogger(__name__)
 
 
 def guardar_MeliIdArticulo(PK: str, SK: str, ID: str):
@@ -17,20 +19,20 @@ def guardar_MeliIdArticulo(PK: str, SK: str, ID: str):
 
 
 def obtener_MeliAccessToken(codigoCompania: str,
-                            codigoTienda: str) -> str:
+                            codigoTienda: str) -> dict:
     key = {
         "PK": f"{codigoCompania.upper()}#TIENDAS",
         "SK": f"T#{codigoTienda.upper()}"
     }
     return tabla.get_item(
         Key=key,
-        ProjectionExpression="meLi.token"
+        ProjectionExpression="meli.refresh_token"
     )['Item']
 
 
 def guardar_MeliAccessToken(codigoCompania: str,
                             codigoTienda: str,
-                            token: str):
+                            token: dict):
     key = {
         "PK": f"{codigoCompania.upper()}#TIENDAS",
         "SK": f"T#{codigoTienda.upper()}"
@@ -38,9 +40,9 @@ def guardar_MeliAccessToken(codigoCompania: str,
     try:
         tabla.update_item(
             Key=key,
-            UpdateExpression="SET meLi.token = :token",
+            UpdateExpression="SET meli.refresh_token = :refresh_token",
             ExpressionAttributeValues={
-                ":token": token
+                ":refresh_token": token
             }
         )
     except ClientError as err:
@@ -64,7 +66,9 @@ def obtener_MeliClientCredentials(codigoCompania: str,
         "PK": f"{codigoCompania.upper()}#TIENDAS",
         "SK": f"T#{codigoTienda.upper()}"
     }
-    return tabla.get_item(
+    client = tabla.get_item(
         Key=key,
-        ProjectionExpression="meLi.client"
-    )['Item']
+        ProjectionExpression="meli.client"
+    )
+    logger.debug(client)
+    return client['Item'].get("meli", {}).get("client", {})

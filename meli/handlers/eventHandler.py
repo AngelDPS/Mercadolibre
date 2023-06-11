@@ -103,8 +103,8 @@ class EventHandler:
         art_handlers = []
         lin_handlers = []
         tie_handlers = []
-        if (self.NewImage.meli_habilitado or
-                self.OldImage.meli_habilitado):
+        if (self.NewImage.get('meli_habilitado', False) or
+                self.OldImage.get('meli_habilitado', False)):
             art_handlers.append(meli_ArtHandler)
         try:
             handlers = {
@@ -112,7 +112,7 @@ class EventHandler:
                 'lineas': lin_handlers,
                 'tiendas': tie_handlers
             }
-            handlers = self.handlers[self.NewImage['entity']]
+            handlers = handlers[self.NewImage['entity']]
             if not handlers:
                 raise KeyError
             logger.info("El evento corresponde a una entidad de "

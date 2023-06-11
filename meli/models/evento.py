@@ -1,4 +1,4 @@
-from pydantic import BaseModel as PydanticBaseModel, Field
+from pydantic import BaseModel as PydanticBaseModel
 from decimal import Decimal
 
 
@@ -11,11 +11,11 @@ class BaseModel(PydanticBaseModel):
 class Marticulo(BaseModel):
     PK: str | None = None
     SK: str | None = None
-    art_des: str | None = Field(None, alias="title")
+    art_des: str | None = None
     codigoCompania: str | None = None
     codigoTienda: str | None = None
     co_art: str | None = None
-    precio: Decimal | None = Field(None, alias='price')
+    precio: Decimal | None = None
     stock_act: int | None = None
     stock_com: int | None = None
     codigo_barra: str | None
@@ -23,6 +23,7 @@ class Marticulo(BaseModel):
     marca: str | None
     meli_habilitado: bool = False
     meli_descripcion: str | None
-    habilitado: bool | None | str = Field(None, alias='status')
+    habilitado: bool | None | str = None
     imagen_url: list[str] | None = None
+    meliID: dict[str, dict[str, str]] | None = None
     # cobra_impuesto: bool = Field(False, alias='taxable')

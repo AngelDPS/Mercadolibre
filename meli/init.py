@@ -17,7 +17,7 @@ from meli.handlers.eventHandler import EventHandler
 logger = Logger(service="meli")
 
 
-@logger.inject_lambda_context(log_event=True)
+# @logger.inject_lambda_context(log_event=True)
 def event_handler(event: list[dict], context: Any) -> list[dict[str, str]]:
     """Manipulador de los eventos de entrada provenientes de
     una base de datos DynamoDB con el registro de inventario para

@@ -5,9 +5,7 @@ from meli.libs.dynamodb import (
 )
 from requests_oauthlib import OAuth2Session
 from logging import getLogger
-import json
 
-# oauth_logger = getLogger('request_oauthlib')
 logger = getLogger(__name__)
 
 
@@ -15,32 +13,6 @@ class MeLiConexion(OAuth2Session):
     token_url = r"https://api.mercadolibre.com/oauth/token"
     codigoCompania: str
     codigoTienda: str
-
-    def token_saver(self, token: dict):
-        tokenFilePath = f'BD/{self.codigoCompania}/token.json'
-        with open(tokenFilePath, 'w') as tokenFile:
-            json.dump(token, tokenFile)
-            logger.info("Nuevo token guardado exitosamente en "
-                        f"{tokenFilePath}.")
-            logger.debug(f"{token = }")
-
-    def token_reader(self) -> dict:
-        tokenFilePath = f'BD/{self.codigoCompania}/token.json'
-        with open(tokenFilePath) as tokenFile:
-            token = json.load(tokenFile)
-            logger.info("Token adquirido exitosamente de "
-                        f"{tokenFilePath}.")
-            logger.debug(f"{token = }")
-            return token
-
-    def config_reader(self) -> dict:
-        configFilePath = f'BD/{self.codigoCompania}/config.json'
-        with open(configFilePath) as configFile:
-            config = json.load(configFile)
-            logger.info("Configuración adquirida exitosamente de "
-                        f"{configFilePath}.")
-            logger.debug(f"{config = }")
-            return config
 
     def token_updater(self, token: str):
         guardar_MeliAccessToken(self. codigoCompania, self.codigoTienda,

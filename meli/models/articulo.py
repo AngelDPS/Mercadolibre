@@ -46,5 +46,5 @@ class MArticulo_input(BaseModel):
     pictures: list[Pictures] | None = None
     attributes: list[Attributes] | None = None
     shipping: Shipping | None = None
-    descripcion: str | None = Field(None, alias='meli_descripcion')
+#     descripcion: str | None = Field(None, alias='meli_descripcion')
     status: str | None = Field(None, alias='habilitado')
