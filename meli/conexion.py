@@ -5,6 +5,7 @@ from meli.libs.dynamodb import (
 )
 from requests_oauthlib import OAuth2Session
 from logging import getLogger
+from decimal import Decimal
 
 logger = getLogger(__name__)
 
@@ -14,7 +15,10 @@ class MeLiConexion(OAuth2Session):
     codigoCompania: str
     codigoTienda: str
 
-    def token_updater(self, token: str):
+    def token_updater(self, token: dict):
+        for k, v in token.items():
+            if isinstance(v, float):
+                token[k] = Decimal(v)
         guardar_MeliAccessToken(self. codigoCompania, self.codigoTienda,
                                 token)
 
@@ -45,6 +49,7 @@ class MeLiConexion(OAuth2Session):
         try:
             self.token = obtener_MeliAccessToken(self.codigoCompania,
                                                  self.codigoTienda)
+            logger.debug(f"{self.token = }")
         except KeyError:
             self.warning("No se pudo obtener el refresh token."
                          "Se intentará generar un token nuevo.")

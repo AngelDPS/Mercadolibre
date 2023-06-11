@@ -116,8 +116,9 @@ class ArticuloHandler:
             logger.warning(f"El tipo de imagen de '{file}' no tiene soporte en"
                            " MeLi y se saltará su carga.")
             return None
-        except Exception:
-            logger.warning("No se pudo asociar la imagen al artículo.")
+        except Exception as err:
+            logger.exception(err)
+            logger.warning(f"No se pudo asociar '{file}' al artículo.")
             try:
                 return imgId
             except NameError:
@@ -126,9 +127,11 @@ class ArticuloHandler:
                 return None
 
     def _crear(self, articuloInput: MArticulo_input):
+        artInput = articuloInput.dict(exclude_none=True)
+        logger.debug(artInput)
         response = self.session.post(
             'items',
-            json=articuloInput.dict(exclude_none=True)
+            json=artInput
         )
         id_dict = {
             'articulo': response.json()['id']

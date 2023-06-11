@@ -8,5 +8,5 @@ enviroment.json
 meli.json
 test_event.json
 test.py
-meli/handlers/articulo.py
-meli/libs/jsonDB.py
+articulo.py
+jsonDB.py

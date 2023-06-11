@@ -27,7 +27,7 @@ def obtener_MeliAccessToken(codigoCompania: str,
     return tabla.get_item(
         Key=key,
         ProjectionExpression="meli.refresh_token"
-    )['Item']
+    )['Item']['meli']['refresh_token']
 
 
 def guardar_MeliAccessToken(codigoCompania: str,
