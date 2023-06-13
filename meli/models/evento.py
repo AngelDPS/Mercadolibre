@@ -8,6 +8,13 @@ class BaseModel(PydanticBaseModel):
         anystr_strip_whitespace = True
 
 
+class Meli(BaseModel):
+    habilitado: bool = False
+    descripcion: str = ""
+    categoria: str = "MLV3530"
+    ID: dict[str, str | dict[str, str]] = {}
+
+
 class Marticulo(BaseModel):
     PK: str | None = None
     SK: str | None = None
@@ -21,9 +28,7 @@ class Marticulo(BaseModel):
     codigo_barra: str | None
     referencia: str | None = None
     marca: str | None
-    meli_habilitado: bool = False
-    meli_descripcion: str | None
     habilitado: bool | None | str = None
     imagen_url: list[str] | None = None
-    meliID: dict[str, dict[str, str]] | None = None
+    meli: Meli = Meli()
     # cobra_impuesto: bool = Field(False, alias='taxable')

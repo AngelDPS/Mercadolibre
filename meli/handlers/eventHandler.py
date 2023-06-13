@@ -1,5 +1,7 @@
 from boto3.dynamodb.types import TypeDeserializer
-from meli.handlers.articuloHandler import ArticuloHandler as meli_ArtHandler
+from meli.handlers.articuloHandler import (
+    ArticuloHandler as meli_ArticuloHandler
+)
 from logging import getLogger
 
 logger = getLogger(__name__)
@@ -103,9 +105,10 @@ class EventHandler:
         art_handlers = []
         lin_handlers = []
         tie_handlers = []
-        if (self.NewImage.get('meli_habilitado', False) or
-                self.OldImage.get('meli_habilitado', False)):
-            art_handlers.append(meli_ArtHandler)
+        logger.info(self.NewImage['meli'])
+        if (self.NewImage.get('meli', {}).get('habilitado', False) or
+                self.OldImage.get('meli', {}).get('habilitado', False)):
+            art_handlers.append(meli_ArticuloHandler)
         try:
             handlers = {
                 'articulos': art_handlers,

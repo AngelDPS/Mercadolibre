@@ -13,7 +13,7 @@ logger = getLogger(__name__)
 def guardar_MeliIdArticulo(PK: str, SK: str, ID: str):
     tabla.update_item(
         Key={"PK": PK, "SK": SK},
-        UpdateExpression="SET meliID = :ID",
+        UpdateExpression="SET meli.ID = :ID",
         ExpressionAttributeValues={":ID": ID}
     )
 

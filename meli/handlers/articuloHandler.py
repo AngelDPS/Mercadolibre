@@ -31,11 +31,11 @@ class ArticuloHandler:
         """Actualiza el ID de MercadoLibre para el articulo usando la
         información guardada en la instancia.
         """
-        logger.debug(f"MeLi ID de artículo: {self.NewImage.meliID}")
+        logger.debug(f"MeLi ID de artículo: {self.NewImage.meli.ID}")
         guardar_MeliIdArticulo(
             PK=self.NewImage.PK,
             SK=self.NewImage.SK,
-            ID=self.NewImage.meliID
+            ID=self.NewImage.meli.ID
         )
 
     @staticmethod
@@ -76,7 +76,7 @@ class ArticuloHandler:
             getattr(self, label).precio = getattr(evento, label)[campo_precio]
             getattr(self, label).habilitado = Habilitado(
                 getattr(self, label).habilitado and
-                getattr(self, label).meli_habilitado
+                getattr(self, label).meli.habilitado
             ).name.lower()
         self.cambios = Marticulo.parse_obj(
             evento.obtenerCambios(self.NewImage, self.OldImage)
@@ -126,20 +126,56 @@ class ArticuloHandler:
                                "MercadoLibre.")
                 return None
 
-    def _crear(self, articuloInput: MArticulo_input):
-        artInput = articuloInput.dict(exclude_none=True)
-        logger.debug(artInput)
+    def _crear(self):
+        codigo_barra = Attributes(
+            id="GTIN", value_name=self.NewImage.codigo_barra
+        )
+        sku = Attributes(
+            id="seller_sku", value_name=self.NewImage.referencia
+        )
+        marca = Attributes(
+            id="brand", value_name=self.NewImage.marca
+        )
+        self.NewImage.meli.ID = {'imagenes': {
+            img: self._cargarImagen(img)
+            for img in self.NewImage.imagen_url
+        }}
+        articuloInput = MArticulo_input(
+            **self.NewImage.dict(by_alias=True,
+                                 exclude_none=True),
+            category_id=self.NewImage.meli.categoria,
+            available_quantity=(self.NewImage.stock_act
+                                - self.NewImage.stock_com),
+            listing_type_id=environ["MELI_TIPO_PUB"],
+            sale_terms=None,
+            pictures=[
+                {'id': imgID}
+                for imgID in self.NewImage.meli.ID['imagenes'].values()
+            ],
+            attributes=[codigo_barra, sku, marca],
+            shipping=Shipping()
+        ).dict(exclude_none=True)
+        logger.debug(articuloInput)
         response = self.session.post(
             'items',
-            json=artInput
+            json=articuloInput
         )
         id_dict = {
             'articulo': response.json()['id']
         }
-        self.session.post(
-            f'items/{id_dict["articulo"]}/description',
-            json={'plain_text': self.NewImage.meli_descripcion})
         return id_dict
+
+    def _agregarDescripcion(self):
+        self.session.post(
+            f'items/{self.NewImage.meli.ID["articulo"]}/description',
+            json={'plain_text': self.NewImage.meli.descripcion}
+        )
+
+    def _establecerEstatus(self):
+        self.session.put(
+            f'items/{self.NewImage.meli.ID["articulo"]}',
+            json={'status': self.NewImage.habilitado}
+        )
 
     def crear(self) -> list[str]:
         """Función dedicada a crear un producto en Shopify dada
@@ -150,34 +186,9 @@ class ArticuloHandler:
         """
         logger.info("Creando producto a partir de artículo.")
         try:
-            codigo_barra = Attributes(
-                id="GTIN", value_name=self.NewImage.codigo_barra
-            )
-            sku = Attributes(
-                id="seller_sku", value_name=self.NewImage.referencia
-            )
-            marca = Attributes(
-                id="brand", value_name=self.NewImage.marca
-            )
-            self.NewImage.meliID = {'imagenes': {
-                img: self._cargarImagen(img)
-                for img in self.NewImage.imagen_url
-            }}
-            articuloInput = MArticulo_input(
-                **self.NewImage.dict(by_alias=True,
-                                     exclude_none=True),
-                available_quantity=(self.NewImage.stock_act
-                                    - self.NewImage.stock_com),
-                listing_type_id=environ["MELI_TIPO_PUB"],
-                sale_terms=None,
-                pictures=[
-                    {'id': imgID}
-                    for imgID in self.NewImage.meliID['imagenes'].values()
-                ],
-                attributes=[codigo_barra, sku, marca],
-                shipping=Shipping()
-            )
-            self.NewImage.meliID |= self._crear(articuloInput)
+            self.NewImage.meli.ID |= self._crear()
+            self._agregarDescripcion()
+            self._establecerEstatus()
             self.actualizarIdBD()
             return ["Producto creado!"]
         except Exception:
@@ -198,14 +209,15 @@ class ArticuloHandler:
             if self.eventName == "INSERT":
                 respuesta = self.crear()
             elif self.cambios.dict(exclude_none=True, exclude_unset=True):
-                if self.NewImage.meliID:
+                if self.NewImage.meli.ID:
                     respuesta = self.modificar()
                 else:
-                    logger.warning("En el evento no se encontró el GID de "
-                                   "Shopify proveniente de la base de datos. "
-                                   "Se asume que el producto correspondiente "
-                                   "no existe en Shopify. Se creará un "
-                                   "producto nuevo con la data actualizada.")
+                    logger.warning("En el evento no se encontró el ID de "
+                                   "MercadoLibre proveniente de la base de "
+                                   "datos. Se asume que el articulo "
+                                   "correspondiente no existe en MercadoLibre."
+                                   " Se creará un articulo nuevo con la data "
+                                   "actualizada.")
                     respuesta = self.crear()
             else:
                 logger.info("Los cambios encontrados no ameritan "
