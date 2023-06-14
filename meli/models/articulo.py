@@ -32,18 +32,18 @@ class Shipping(BaseModel):
 
 
 class MArticulo_input(BaseModel):
-    title: str = Field(..., alias="art_des")
+    title: str = Field('', alias="art_des")
     condition: Literal["new", "used"] = "new"
-    category_id: str = "MLV3530"
-    price: float = Field(..., alias="precio")
+    category_id: str | None = Field("MLV3530", alias="categoria")
+    price: float = Field(0, alias="precio")
     currency_id: Literal["USD", "VES"] = "USD"
     listing_type_id: Literal["gold_pro", "gold_premium",
                              "gold_special", "gold", "silver", "bronze",
-                             "free"]
+                             "free"] | None = Field("free", alias="tipo")
     available_quantity: int = 0
     buying_mode: Literal["buy_it_now"] = "buy_it_now"
     sale_terms: list[SaleTerms] | None = None
     pictures: list[Pictures] | None = None
     attributes: list[Attributes] | None = None
-    shipping: Shipping | None = None
+    shipping: Shipping | None = Shipping()
     status: str | None = Field(None, alias='habilitado')

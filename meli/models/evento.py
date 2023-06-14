@@ -1,18 +1,12 @@
 from pydantic import BaseModel as PydanticBaseModel
 from decimal import Decimal
+from typing import Literal
 
 
 class BaseModel(PydanticBaseModel):
     class Config:
         allow_population_by_field_name = True
         anystr_strip_whitespace = True
-
-
-class Meli(BaseModel):
-    habilitado: bool = False
-    descripcion: str = ""
-    categoria: str = "MLV3530"
-    ID: dict[str, str | dict[str, str]] = {}
 
 
 class Marticulo(BaseModel):
@@ -30,5 +24,12 @@ class Marticulo(BaseModel):
     marca: str | None
     habilitado: bool | None | str = None
     imagen_url: list[str] | None = None
-    meli: Meli = Meli()
     # cobra_impuesto: bool = Field(False, alias='taxable')
+
+
+class Marticulo_meli(Marticulo):
+    habilitado: bool = False
+    descripcion: str | None = ""
+    categoria: str | None = "MLV3530"
+    tipo: Literal["free", "bronze", "gold_special"] = "free"
+    ID: dict[str, str | dict[str, str]] | None = {}

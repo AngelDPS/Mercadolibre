@@ -7,7 +7,7 @@ from meli.models.articulo import (
     # ShippingCost,
     Shipping
 )
-from meli.models.evento import Marticulo
+from meli.models.evento import Marticulo_meli as Marticulo
 from meli.conexion import MeLiConexion
 from os import environ
 from re import search
@@ -25,17 +25,33 @@ class Habilitado(Enum):
     PAUSED = 0
 
 
+class TipoPublicacion(Enum):
+    FREE = "free"
+    GRATIS = "free"
+    BRONZE = "bronze"
+    BASICO = "bronze"
+    BÁSICO = "bronze"
+    GOLD_SPECIAL = "gold_special"
+    PREMIUM = "gold_special"
+
+
 class ArticuloHandler:
+
+    attr_from_entry = {
+        'GTIN': 'codigo_barra',
+        'seller_sku': 'referencia',
+        'brand': 'marca'
+    }
 
     def actualizarIdBD(self):
         """Actualiza el ID de MercadoLibre para el articulo usando la
         información guardada en la instancia.
         """
-        logger.debug(f"MeLi ID de artículo: {self.NewImage.meli.ID}")
+        logger.debug(f"MeLi ID de artículo: {self.NewImage.ID}")
         guardar_MeliIdArticulo(
             PK=self.NewImage.PK,
             SK=self.NewImage.SK,
-            ID=self.NewImage.meli.ID
+            ID=self.NewImage.ID
         )
 
     @staticmethod
@@ -46,8 +62,6 @@ class ArticuloHandler:
             str: Campo de precio a usar.
         """
         try:
-            # TODO: Aquí se obtiene el parámetro de configuración para el
-            # campo del precio.
             return environ['MELI_PRECIO']
         except KeyError:
             logger.exception("No se encontró la variable de ambiente 'precio' "
@@ -70,17 +84,32 @@ class ArticuloHandler:
         """
         self.eventName = evento.eventName
         campo_precio = self.obtenerCampoPrecio()
+
+        def extraer_del_mapa_meli(label):
+            registros = ['descripcion', 'categoria', 'ID']
+            for reg in registros:
+                setattr(
+                    getattr(self, label),
+                    reg,
+                    getattr(evento, label)['meli'].get(reg)
+                )
         for label in ['NewImage', 'OldImage']:
             setattr(self, label,
                     Marticulo.parse_obj(getattr(evento, label)))
             getattr(self, label).precio = getattr(evento, label)[campo_precio]
             getattr(self, label).habilitado = Habilitado(
                 getattr(self, label).habilitado and
-                getattr(self, label).meli.habilitado
+                getattr(evento, label)['meli']['habilitado']
             ).name.lower()
-        self.cambios = Marticulo.parse_obj(
+            getattr(self, label).tipo = TipoPublicacion(
+                getattr(evento, label)['meli'].get("tipo", "free").upper()
+            ).value
+            extraer_del_mapa_meli(label)
+
+        self.cambios = (
             evento.obtenerCambios(self.NewImage, self.OldImage)
         )
+        self.cambios.pop("ID", None)
         self.session = MeLiConexion(self.NewImage.codigoCompania,
                                     self.NewImage.codigoTienda)
 
@@ -101,7 +130,6 @@ class ArticuloHandler:
                     'Key': f"imagenes/{fname}"},
             ExpiresIn=3600
         )
-        # url = f"http://mla-s2-p.mlstatic.com/{fname}"
         imagen = requests.get(url).content
         return {'file': (fname, imagen, mime_type)}
 
@@ -126,33 +154,33 @@ class ArticuloHandler:
                                "MercadoLibre.")
                 return None
 
+    def _obtenerAtributos(self, usar_cambios: bool = False):
+        if usar_cambios:
+            atributos = [(id, self.cambios.get(registro))
+                         for id, registro in self.attr_from_entry.items()]
+        else:
+            atributos = [(id, getattr(self.NewImage, registro, None))
+                         for id, registro in self.attr_from_entry.items()]
+        atributos = [Attributes(id=id, value_name=value)
+                     for id, value in atributos if value is not None]
+        return atributos or None
+
     def _crear(self):
-        codigo_barra = Attributes(
-            id="GTIN", value_name=self.NewImage.codigo_barra
-        )
-        sku = Attributes(
-            id="seller_sku", value_name=self.NewImage.referencia
-        )
-        marca = Attributes(
-            id="brand", value_name=self.NewImage.marca
-        )
-        self.NewImage.meli.ID = {'imagenes': {
+        self.NewImage.ID = {'imagenes': {
             img: self._cargarImagen(img)
             for img in self.NewImage.imagen_url
         }}
         articuloInput = MArticulo_input(
             **self.NewImage.dict(by_alias=True,
                                  exclude_none=True),
-            category_id=self.NewImage.meli.categoria,
             available_quantity=(self.NewImage.stock_act
                                 - self.NewImage.stock_com),
-            listing_type_id=environ["MELI_TIPO_PUB"],
             sale_terms=None,
             pictures=[
                 {'id': imgID}
-                for imgID in self.NewImage.meli.ID['imagenes'].values()
+                for imgID in self.NewImage.ID['imagenes'].values()
             ],
-            attributes=[codigo_barra, sku, marca],
+            attributes=self._obtenerAtributos(),
             shipping=Shipping()
         ).dict(exclude_none=True)
         logger.debug(articuloInput)
@@ -167,13 +195,13 @@ class ArticuloHandler:
 
     def _agregarDescripcion(self):
         self.session.post(
-            f'items/{self.NewImage.meli.ID["articulo"]}/description',
-            json={'plain_text': self.NewImage.meli.descripcion}
+            f'items/{self.NewImage.ID["articulo"]}/description',
+            json={'plain_text': self.NewImage.descripcion or ""}
         )
 
     def _establecerEstatus(self):
         self.session.put(
-            f'items/{self.NewImage.meli.ID["articulo"]}',
+            f'items/{self.NewImage.ID["articulo"]}',
             json={'status': self.NewImage.habilitado}
         )
 
@@ -186,7 +214,7 @@ class ArticuloHandler:
         """
         logger.info("Creando producto a partir de artículo.")
         try:
-            self.NewImage.meli.ID |= self._crear()
+            self.NewImage.ID |= self._crear()
             self._agregarDescripcion()
             self._establecerEstatus()
             self.actualizarIdBD()
@@ -195,8 +223,68 @@ class ArticuloHandler:
             logger.exception("No fue posible crear el producto.")
             raise
 
+    def _modificarDescripcion(self):
+        if self.cambios.get("descripcion") is not None:
+            r = self.session.put(
+                f'items/{self.NewImage.ID["articulo"]}/description',
+                json={'plain_text': self.NewImage.descripcion}
+            )
+            r.raise_for_status()
+            return "Descripción modificada."
+        else:
+            return "Descripción no modificada."
+
+    def _obtenerImagenes(self):
+        urls_anexados = list(
+            set(self.NewImage.imagen_url) - set(self.OldImage.imagen_url)
+        )
+        self.NewImage.ID['imagenes'] |= {
+            img: self._cargarImagen(img)
+            for img in urls_anexados
+        }
+        if self.cambios.get("imagen_url", None) is not None:
+            return [
+                {'id': self.NewImage.ID['imagenes'][fname]}
+                for fname in self.cambios["imagen_url"]
+            ]
+        else:
+            return None
+
+    def _cambioCantidad(self):
+        stock_new = (self.NewImage.stock_act - self.NewImage.stock_com)
+        stock_old = (self.OldImage.stock_act - self.OldImage.stock_com)
+        if stock_new != stock_old:
+            return stock_new
+        else:
+            return None
+
+    def _modificarArticulo(self):
+        articuloInput = MArticulo_input(
+            **self.cambios,
+            available_quantity=self._cambioCantidad(),
+            pictures=self._listaImagenesModificadas(),
+            attributes=self._obtenerAtributos(usar_cambios=True)
+        ).dict(exclude_none=True, exclude_unset=True)
+        logger.debug(articuloInput)
+        if articuloInput:
+            response = self.session.put(
+                f'items/{self.NewImage.ID["articulo"]}',
+                json=articuloInput
+            )
+            response.raise_for_status()
+            return "Producto Modificado"
+        else:
+            return "Producto no modificado."
+
     def modificar(self) -> list[str]:
-        pass
+        try:
+            respuestas = []
+            respuestas.append(self._modificarDescripcion())
+            respuestas.append(self._modificarArticulo())
+            return respuestas
+        except Exception:
+            logger.exception("No fue posible modificar el producto.")
+            raise
 
     def ejecutar(self) -> list[str]:
         """Ejecuta la acción requerida por el evento procesado en la instancia.
@@ -208,8 +296,8 @@ class ArticuloHandler:
         try:
             if self.eventName == "INSERT":
                 respuesta = self.crear()
-            elif self.cambios.dict(exclude_none=True, exclude_unset=True):
-                if self.NewImage.meli.ID:
+            elif self.cambios:
+                if self.NewImage.ID:
                     respuesta = self.modificar()
                 else:
                     logger.warning("En el evento no se encontró el ID de "
