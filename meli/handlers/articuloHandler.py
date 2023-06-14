@@ -82,9 +82,6 @@ class ArticuloHandler:
             encontrados en los campos entre la imagen nueva y vieja.
             Defaults to None.
         """
-        self.eventName = evento.eventName
-        campo_precio = self.obtenerCampoPrecio()
-
         def extraer_del_mapa_meli(label):
             registros = ['descripcion', 'categoria', 'ID']
             for reg in registros:
@@ -93,6 +90,9 @@ class ArticuloHandler:
                     reg,
                     getattr(evento, label)['meli'].get(reg)
                 )
+
+        self.eventName = evento.eventName
+        campo_precio = self.obtenerCampoPrecio()
         for label in ['NewImage', 'OldImage']:
             setattr(self, label,
                     Marticulo.parse_obj(getattr(evento, label)))
@@ -101,9 +101,9 @@ class ArticuloHandler:
                 getattr(self, label).habilitado and
                 getattr(evento, label)['meli']['habilitado']
             ).name.lower()
-            getattr(self, label).tipo = TipoPublicacion(
-                getattr(evento, label)['meli'].get("tipo", "free").upper()
-            ).value
+            getattr(self, label).tipo_publicacion = TipoPublicacion[
+                getattr(evento, label)['meli'].get("tipo_publicacion", "free").upper()
+            ].value
             extraer_del_mapa_meli(label)
 
         self.cambios = (

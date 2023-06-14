@@ -39,7 +39,8 @@ class MArticulo_input(BaseModel):
     currency_id: Literal["USD", "VES"] = "USD"
     listing_type_id: Literal["gold_pro", "gold_premium",
                              "gold_special", "gold", "silver", "bronze",
-                             "free"] | None = Field("free", alias="tipo")
+                             "free"] | None = Field("free",
+                                                    alias="tipo_publicacion")
     available_quantity: int = 0
     buying_mode: Literal["buy_it_now"] = "buy_it_now"
     sale_terms: list[SaleTerms] | None = None

@@ -31,5 +31,5 @@ class Marticulo_meli(Marticulo):
     habilitado: bool = False
     descripcion: str | None = ""
     categoria: str | None = "MLV3530"
-    tipo: Literal["free", "bronze", "gold_special"] = "free"
+    tipo_publicacion: Literal["free", "bronze", "gold_special"] = "free"
     ID: dict[str, str | dict[str, str]] | None = {}
