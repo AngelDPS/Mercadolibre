@@ -41,7 +41,7 @@ class MArticulo_input(BaseModel):
                              "gold_special", "gold", "silver", "bronze",
                              "free"] | None = Field("free",
                                                     alias="tipo_publicacion")
-    available_quantity: int = 0
+    available_quantity: int | None = 0
     buying_mode: Literal["buy_it_now"] = "buy_it_now"
     sale_terms: list[SaleTerms] | None = None
     pictures: list[Pictures] | None = None

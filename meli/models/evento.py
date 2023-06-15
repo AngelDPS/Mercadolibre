@@ -21,9 +21,10 @@ class Marticulo(BaseModel):
     stock_com: int | None = None
     codigo_barra: str | None
     referencia: str | None = None
-    marca: str | None
+    marca: str | None = "Generico"
     habilitado: bool | None | str = None
     imagen_url: list[str] | None = None
+    modelo: str | None = "N/A"
     # cobra_impuesto: bool = Field(False, alias='taxable')
 
 

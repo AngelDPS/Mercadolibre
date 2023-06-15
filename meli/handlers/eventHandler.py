@@ -104,7 +104,6 @@ class EventHandler:
         art_handlers = []
         lin_handlers = []
         tie_handlers = []
-        logger.info(self.NewImage['meli'])
         if (self.NewImage.get('meli', {}).get('habilitado', False) or
                 self.OldImage.get('meli', {}).get('habilitado', False)):
             art_handlers.append(meli_ArticuloHandler)

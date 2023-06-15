@@ -37,12 +37,6 @@ class TipoPublicacion(Enum):
 
 class ArticuloHandler:
 
-    attr_from_entry = {
-        'GTIN': 'codigo_barra',
-        'seller_sku': 'referencia',
-        'brand': 'marca'
-    }
-
     def actualizarIdBD(self):
         """Actualiza el ID de MercadoLibre para el articulo usando la
         información guardada en la instancia.
@@ -102,7 +96,8 @@ class ArticuloHandler:
                 getattr(evento, label)['meli']['habilitado']
             ).name.lower()
             getattr(self, label).tipo_publicacion = TipoPublicacion[
-                getattr(evento, label)['meli'].get("tipo_publicacion", "free").upper()
+                getattr(evento, label)['meli'].get("tipo_publicacion",
+                                                   "free").upper()
             ].value
             extraer_del_mapa_meli(label)
 
@@ -155,21 +150,23 @@ class ArticuloHandler:
                 return None
 
     def _obtenerAtributos(self, usar_cambios: bool = False):
+        attr_from_entry = {
+            'GTIN': 'codigo_barra',
+            'SELLER_SKU': 'referencia',
+            'BRAND': 'marca',
+            'MODEL': 'modelo'
+        }
         if usar_cambios:
             atributos = [(id, self.cambios.get(registro))
-                         for id, registro in self.attr_from_entry.items()]
+                         for id, registro in attr_from_entry.items()]
         else:
             atributos = [(id, getattr(self.NewImage, registro, None))
-                         for id, registro in self.attr_from_entry.items()]
+                         for id, registro in attr_from_entry.items()]
         atributos = [Attributes(id=id, value_name=value)
                      for id, value in atributos if value is not None]
         return atributos or None
 
     def _crear(self):
-        self.NewImage.ID = {'imagenes': {
-            img: self._cargarImagen(img)
-            for img in self.NewImage.imagen_url
-        }}
         articuloInput = MArticulo_input(
             **self.NewImage.dict(by_alias=True,
                                  exclude_none=True),
@@ -214,6 +211,11 @@ class ArticuloHandler:
         """
         logger.info("Creando producto a partir de artículo.")
         try:
+            self.NewImage.ID = {}
+            self.NewImage.ID |= {'imagenes': {
+                img: self._cargarImagen(img)
+                for img in self.NewImage.imagen_url
+            }}
             self.NewImage.ID |= self._crear()
             self._agregarDescripcion()
             self._establecerEstatus()
@@ -262,7 +264,7 @@ class ArticuloHandler:
         articuloInput = MArticulo_input(
             **self.cambios,
             available_quantity=self._cambioCantidad(),
-            pictures=self._listaImagenesModificadas(),
+            pictures=self._obtenerImagenes(),
             attributes=self._obtenerAtributos(usar_cambios=True)
         ).dict(exclude_none=True, exclude_unset=True)
         logger.debug(articuloInput)
