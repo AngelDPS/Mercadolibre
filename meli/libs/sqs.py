@@ -16,8 +16,8 @@ def receive_messages():
         MaxNumberOfMessages=10,
         WaitTimeSeconds=1,
     )
-    logger.warning(f"Se recibieron {len(response.get('Messages', []))} "
-                   "eventos NO procesados en cola.")
+    logger.info(f"Se recibieron {len(response.get('Messages', []))} "
+                "eventos NO procesados en cola.")
     return response
 
 
@@ -31,9 +31,9 @@ def delete_message(id_recepcion):
 def procesar_entidades_repetidas(codigo, lista_codigos, eventos, NewImage):
     if codigo in lista_codigos:
         idx = lista_codigos.index(codigo)
-        eventos[idx][0]["dynamodb"].setdefault(
-            "OldImage", eventos[idx][0]["dynamodb"]["NewImage"]
-        )
+        # eventos[idx][0]["dynamodb"].setdefault(
+        #     "OldImage", eventos[idx][0]["dynamodb"]["NewImage"]
+        # )
         eventos[idx][0]["dynamodb"]["NewImage"] = NewImage
         return idx
     else:

@@ -49,9 +49,8 @@ class EventHandler:
             resultado['NewImage'] = EventHandler.deserializar(
                 resultado['NewImage']
             )
-            resultado['OldImage'] = (
-                EventHandler.deserializar(resultado['OldImage'])
-                if evento['eventName'] == "MODIFY" else resultado['NewImage']
+            resultado['OldImage'] = EventHandler.deserializar(
+                resultado.get('OldImage', {})
             )
             return resultado['NewImage'], resultado['OldImage']
         except KeyError:
@@ -76,11 +75,14 @@ class EventHandler:
             Mimage | None: Modelo con los campos de la base de datos que
             sufrieron cambios o None en caso de no haber ninguno
         """
-        cambios = {
-            k: v for k, v in NewImage
-            if (v != getattr(OldImage, k) and k != "updated_at")
-        }
-        logger.debug(f'{cambios = }')
+        cambios = {}
+        for k, v in OldImage.items():
+            if isinstance(v, dict):
+                cambios[k] = EventHandler.obtenerCambios(NewImage.get(k, {}),
+                                                         v)
+            elif v != NewImage.get(k) and k != "updated_at":
+                cambios[k] = NewImage.get(k)
+        cambios |= {k: v for k, v in NewImage.items() if k not in OldImage}
         return cambios
 
     def __init__(self, evento: dict):
@@ -90,10 +92,12 @@ class EventHandler:
             evento (dict): Evento accionado por DynamoDB.
         """
         self.eventName = evento['eventName']
-        self.NewImage, self.OldImage = EventHandler.formatearEvento(evento)
+        self.NewImage, self.OldImage = self.formatearEvento(evento)
+        self.cambios = self.obtenerCambios(self.NewImage, self.OldImage)
+        logger.debug(f'{self.cambios = }')
 
     @property
-    def handlers(self):
+    def handler(self):
         """Obtiene un manipulador según el tipo de registro que accionó el
         evento.
 
@@ -101,25 +105,15 @@ class EventHandler:
             ProductoHandler: El manipulador adecuado para el evento del
             registro.
         """
-        art_handlers = []
-        lin_handlers = []
-        tie_handlers = []
-        if (self.NewImage.get('meli', {}).get('habilitado', False) or
-                self.OldImage.get('meli', {}).get('habilitado', False)):
-            art_handlers.append(meli_ArticuloHandler)
         try:
-            handlers = {
-                'articulos': art_handlers,
-                'lineas': lin_handlers,
-                'tiendas': tie_handlers
+            handler = {
+                'articulos': meli_ArticuloHandler,
             }
-            handlers = handlers[self.NewImage['entity']]
-            if not handlers:
-                raise KeyError
+            handler = handler[self.NewImage['entity']]
             logger.info("El evento corresponde a una entidad de "
                         f"{self.NewImage['entity']} y será procesado por "
-                        f"los handlers {handlers}.")
-            return handlers
+                        f"el {handler}.")
+            return handler
         except KeyError as err:
             msg = ("El evento corresponde a una entidad de "
                    f"{self.NewImage['entity']}, cuyo proceso no está "
@@ -136,9 +130,7 @@ class EventHandler:
             acción y el resultado obtenido.
         """
         try:
-            r = []
-            for handler in self.handlers:
-                r.append(handler(self).ejecutar())
+            r = self.handler(self).ejecutar()
             return {"status": "OK", "respuestas": r}
         except Exception:
             logger.exception("Ocurrió un error ejecutando el evento.")
