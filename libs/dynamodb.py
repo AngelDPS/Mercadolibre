@@ -1,12 +1,10 @@
 import boto3
 from botocore.exceptions import ClientError
-from os import environ
+from os import getenv
 from logging import getLogger
 
 dynamodb = boto3.resource("dynamodb")
-# TODO: Aquí se obtiene y usa el parámetro de configuración para la base de
-# datos de DynamoDB.
-tabla = dynamodb.Table(environ["DYNAMODB_TABLE"])
+tabla = dynamodb.Table(f"{getenv('NOMBRE_COMPANIA')}-db")
 logger = getLogger(__name__)
 
 

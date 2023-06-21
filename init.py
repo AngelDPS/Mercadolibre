@@ -1,24 +1,14 @@
 from typing import Any
 from aws_lambda_powertools import Logger
-from os import environ
-from meli.libs.util import obtener_codigo
-from aws_lambda_powertools.utilities import parameters
-# Obtiene las variables de entorno
-environ |= parameters.get_parameter(
-    "/TestingFucntion/meli", transform="json", max_age=300
-)
-from meli.libs.sqs import (
-    process_messages,
-    procesar_entidades_repetidas,
-    delete_message
-)
-from meli.handlers.eventHandler import EventHandler
+from libs.util import obtener_codigo
+from handlers.sqsHandler import SQShandler
+from handlers.eventHandler import EventHandler
 
 logger = Logger(service="meli")
 
 
 @logger.inject_lambda_context(log_event=True)
-def event_handler(event: list[dict], context: Any) -> list[dict[str, str]]:
+def lambda_handler(event: list[dict], context: Any) -> list[dict[str, str]]:
     """Manipulador de los eventos de entrada provenientes de
     una base de datos DynamoDB con el registro de inventario para
     ser manejados en una tienda de MercadoLibre.
@@ -38,9 +28,10 @@ def event_handler(event: list[dict], context: Any) -> list[dict[str, str]]:
     logger.info("*** INICIO LAMBDA MERCADOLIBRE ***")
     # raise Exception("PRUEBA")
     codigo = obtener_codigo(event)
-    eventos_en_cola, ids, codigos_en_cola, repetidos = process_messages()
+    sqs = SQShandler("meli")
+    eventos_en_cola, ids, codigos_en_cola, repetidos = sqs.process_messages()
 
-    idx = procesar_entidades_repetidas(
+    idx = sqs.procesar_entidades_repetidas(
         codigo=codigo,
         lista_codigos=codigos_en_cola,
         eventos=eventos_en_cola,
@@ -79,9 +70,11 @@ def event_handler(event: list[dict], context: Any) -> list[dict[str, str]]:
             continue
         else:
             if ID:
-                delete_message(ID)
+                sqs.delete_message(ID)
                 if codigo_actual in repetidos:
-                    delete_message(repetidos[codigo_actual]["ReceiptHandle"])
+                    sqs.delete_message(
+                        repetidos[codigo_actual]["ReceiptHandle"]
+                    )
 
     logger.info("*** FIN LAMBDA MERCADOLIBRE ***")
     return r
