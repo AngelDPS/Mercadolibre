@@ -9,15 +9,27 @@ from models.articulo import (
 )
 from models.evento import Marticulo_meli as Marticulo
 from libs.conexion import MeLiConexion
-from os import environ
+from libs.util import get_parameter
 from re import search
+from os import getenv
 import requests
 import boto3
 from enum import Enum
 
 logger = getLogger(__name__)
-s3_client = boto3.client('s3', region_name=environ.get("AWS_REGION"),
+s3_client = boto3.client('s3', region_name=getenv("AWS_REGION"),
+                         # TODO: ¿Debería utilizar el parámetro "region" en el
+                         # parameter store?
                          config=boto3.session.Config(signature_version='s3v4'))
+
+
+def get_url(fname: str) -> str:
+    return s3_client.generate_presigned_url(
+            'get_object',
+            Params={'Bucket': get_parameter("bucketname"),
+                    'Key': f"imagenes/{fname}"},
+            ExpiresIn=3600
+        )
 
 
 class Habilitado(Enum):
@@ -36,20 +48,6 @@ class TipoPublicacion(Enum):
 
 
 class ArticuloHandler:
-
-    def obtenerCampoPrecio() -> str:
-        """Lee el campo de precio a usar para el artículo.
-
-        Returns:
-            str: Campo de precio a usar.
-        """
-        try:
-            return environ['MELI_PRECIO']
-        except KeyError:
-            logger.exception("No se encontró la variable de ambiente 'precio' "
-                             "con el campo de precio que deben usar los "
-                             "articulos.")
-            raise
 
     def __init__(self, evento):
         """Constructor de la clase
@@ -85,7 +83,7 @@ class ArticuloHandler:
         else:
             self.procesar = True
 
-            campo_precio = environ.get('MELI_PRECIO')
+            campo_precio = get_parameter('MELI_PRECIO')
 
             self.cambios = evento.cambios
             self.cambios.get('meli', {}).pop('ID', None)
@@ -149,12 +147,7 @@ class ArticuloHandler:
                              "[jpg, jpeg, png, gif, webp].")
         mime_type = ("image/jpeg" if fextension == "jpg"
                      else f"image/{fextension}")
-        url = s3_client.generate_presigned_url(
-            'get_object',
-            Params={'Bucket': environ.get("BUCKET_NAME"),
-                    'Key': f"imagenes/{fname}"},
-            ExpiresIn=3600
-        )
+        url = get_url(fname)
         imagen = requests.get(url).content
         return {'file': (fname, imagen, mime_type)}
 
