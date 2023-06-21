@@ -1,24 +1,24 @@
 from typing import Any
 from aws_lambda_powertools import Logger
 from os import environ
-from meli.libs.util import obtener_codigo
+from libs.util import obtener_codigo
 from aws_lambda_powertools.utilities import parameters
 # Obtiene las variables de entorno
 environ |= parameters.get_parameter(
     "/TestingFucntion/meli", transform="json", max_age=300
 )
-from meli.libs.sqs import (
+from libs.sqs import (
     process_messages,
     procesar_entidades_repetidas,
     delete_message
 )
-from meli.handlers.eventHandler import EventHandler
+from handlers.eventHandler import EventHandler
 
 logger = Logger(service="meli")
 
 
 @logger.inject_lambda_context(log_event=True)
-def event_handler(event: list[dict], context: Any) -> list[dict[str, str]]:
+def lambda_handler(event: list[dict], context: Any) -> list[dict[str, str]]:
     """Manipulador de los eventos de entrada provenientes de
     una base de datos DynamoDB con el registro de inventario para
     ser manejados en una tienda de MercadoLibre.

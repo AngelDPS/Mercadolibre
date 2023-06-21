@@ -1,14 +1,14 @@
-from meli.libs.dynamodb import guardar_MeliIdArticulo
+from libs.dynamodb import guardar_MeliIdArticulo
 from logging import getLogger
-from meli.models.articulo import (
+from models.articulo import (
     MArticulo_input,
     # SaleTerms,
     Attributes,
     # ShippingCost,
     Shipping
 )
-from meli.models.evento import Marticulo_meli as Marticulo
-from meli.conexion import MeLiConexion
+from models.evento import Marticulo_meli as Marticulo
+from libs.conexion import MeLiConexion
 from os import environ
 from re import search
 import requests

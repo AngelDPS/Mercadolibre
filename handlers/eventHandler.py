@@ -1,5 +1,5 @@
 from boto3.dynamodb.types import TypeDeserializer
-from meli.handlers.articuloHandler import (
+from handlers.articuloHandler import (
     ArticuloHandler as meli_ArticuloHandler
 )
 from logging import getLogger

@@ -2,7 +2,7 @@ import json
 import boto3
 from os import environ
 from logging import getLogger
-from meli.libs.util import obtener_codigo
+from libs.util import obtener_codigo
 
 logger = getLogger(__name__)
 sqs_client = boto3.client("sqs")
