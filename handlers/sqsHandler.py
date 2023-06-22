@@ -52,7 +52,7 @@ class SQShandler:
         codigos_repetidos = {}
 
         for n, mensaje in enumerate(
-                self.receive_messages().get("Messages", [])
+                self._receive_messages().get("Messages", [])
         ):
             id_recepcion = mensaje['ReceiptHandle']
             evento = json.loads(mensaje["Body"])

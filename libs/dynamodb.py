@@ -68,5 +68,4 @@ def obtener_MeliClientCredentials(codigoCompania: str,
         Key=key,
         ProjectionExpression="meli.client"
     )
-    logger.debug(client)
     return client['Item'].get("meli", {}).get("client", {})
