@@ -18,18 +18,16 @@ from enum import Enum
 
 logger = getLogger(__name__)
 s3_client = boto3.client('s3', region_name=getenv("AWS_REGION"),
-                         # TODO: ¿Debería utilizar el parámetro "region" en el
-                         # parameter store?
                          config=boto3.session.Config(signature_version='s3v4'))
 
 
 def get_url(fname: str) -> str:
     return s3_client.generate_presigned_url(
-            'get_object',
-            Params={'Bucket': get_parameter("bucketname"),
-                    'Key': f"imagenes/{fname}"},
-            ExpiresIn=3600
-        )
+        'get_object',
+        Params={'Bucket': get_parameter("bucketname"),
+                'Key': f"imagenes/{fname}"},
+        ExpiresIn=3600
+    )
 
 
 class Habilitado(Enum):
@@ -62,17 +60,8 @@ class ArticuloHandler:
             encontrados en los campos entre la imagen nueva y vieja.
             Defaults to None.
         """
-        def extraer_del_mapa_meli(d: dict):
-            registros = ['descripcion', 'categoria', 'ID']
-            r = {}
-            if d.get('meli'):
-                for reg in registros:
-                    if reg in d['meli']:
-                        r[reg] = d['meli'][reg]
-            return r
-
-        if not (evento.OldImage.get('meli', {}).get('habilitado') or
-                evento.cambios.get('meli', {}).get('habilitado')):
+        if not (evento.OldImage.get('meli_habilitado') or
+                evento.cambios.get('meli_habilitado')):
             logger.info(
                 """El articulo no está habilitado para MercadoLibre y será
                 ignorado.
@@ -86,24 +75,22 @@ class ArticuloHandler:
             campo_precio = get_parameter('MELI_PRECIO')
 
             self.cambios = evento.cambios
-            self.cambios.get('meli', {}).pop('ID', None)
+            self.cambios.pop('meli_ID', None)
             if campo_precio in self.cambios:
                 self.cambios['precio'] = self.cambios[campo_precio]
             if ('habilitado' in self.cambios
-                    or 'habilitado' in self.cambios.get('meli', {})):
+                    or 'meli_habilitado' in self.cambios):
                 self.cambios['habilitado'] = Habilitado(
                     self.cambios.get('habilitado',
                                      evento.OldImage.get('habilitado')) and
-                    self.cambios.get('meli', {}).get(
-                        'habilitado',
-                        evento.OldImage.get('meli', {}).get('habilitado')
-                    )
+                    self.cambios.get('meli_habilitado',
+                                     evento.OldImage.get('meli_habilitado')
+                                     )
                 ).name.lower()
-            if 'tipo_publicacion' in self.cambios.get('meli', {}):
-                self.cambios['tipo_publicacion'] = TipoPublicacion[
-                    self.cambios['meli']['tipo_publicacion'].upper()
+            if 'meli_tipo_publicacion' in self.cambios:
+                self.cambios['meli_tipo_publicacion'] = TipoPublicacion[
+                    self.cambios['meli_tipo_publicacion'].upper()
                 ].value
-            self.cambios |= extraer_del_mapa_meli(self.cambios)
             self.cambios = Marticulo.parse_obj(self.cambios)
 
             self.OldImage = evento.OldImage
@@ -111,13 +98,11 @@ class ArticuloHandler:
                 self.OldImage['precio'] = self.OldImage[campo_precio]
                 self.OldImage['habilitado'] = Habilitado(
                     self.OldImage.get('habilitado') and
-                    self.OldImage.get('meli', {}).get('habilitado')
+                    self.OldImage.get('meli_habilitado')
                 ).name.lower()
-                self.OldImage['tipo_publicacion'] = TipoPublicacion[
-                    self.OldImage.get('meli', {}).get("tipo_publicacion",
-                                                      "free").upper()
+                self.OldImage['meli_tipo_publicacion'] = TipoPublicacion[
+                    self.OldImage.get('meli_tipo_publicacion', 'free').upper()
                 ].value
-                self.OldImage |= extraer_del_mapa_meli(self.OldImage)
             self.OldImage = Marticulo.parse_obj(self.OldImage)
 
             self.session = MeLiConexion(
@@ -129,11 +114,11 @@ class ArticuloHandler:
         """Actualiza el ID de MercadoLibre para el articulo usando la
         información guardada en la instancia.
         """
-        logger.debug(f"MeLi ID de artículo: {self.OldImage.ID}")
+        logger.debug(f"MeLi ID de artículo: {self.OldImage.meli_ID}")
         guardar_MeliIdArticulo(
             PK=self.OldImage.PK or self.cambios.PK,
             SK=self.OldImage.SK or self.cambios.SK,
-            ID=self.OldImage.ID
+            ID=self.OldImage.meli_ID
         )
 
     @staticmethod
@@ -194,7 +179,7 @@ class ArticuloHandler:
             sale_terms=None,
             pictures=[
                 {'id': imgID}
-                for imgID in self.OldImage.ID['imagenes'].values()
+                for imgID in self.OldImage.meli_ID['imagenes'].values()
             ],
             attributes=self._obtenerAtributos(),
             shipping=Shipping()
@@ -211,13 +196,14 @@ class ArticuloHandler:
 
     def _agregarDescripcion(self):
         self.session.post(
-            f'items/{self.OldImage.ID["articulo"]}/description',
-            json={'plain_text': self.cambios.descripcion or "Sin descripción."}
+            f'items/{self.OldImage.meli_ID["articulo"]}/description',
+            json={'plain_text': (self.cambios.meli_descripcion
+                                 or "Sin descripción.")}
         )
 
     def _establecerEstatus(self):
         self.session.put(
-            f'items/{self.OldImage.ID["articulo"]}',
+            f'items/{self.OldImage.meli_ID["articulo"]}',
             json={'status': self.cambios.habilitado}
         )
 
@@ -231,11 +217,11 @@ class ArticuloHandler:
         logger.info("Creando artículo para MercadoLibre.")
         logger.debug(self.cambios.dict())
         try:
-            self.OldImage.ID |= {'imagenes': {
+            self.OldImage.meli_ID |= {'imagenes': {
                 img: self._cargarImagen(img)
                 for img in self.cambios.imagen_url
             }}
-            self.OldImage.ID |= self._crear()
+            self.OldImage.meli_ID |= self._crear()
             self._agregarDescripcion()
             self._establecerEstatus()
             self.actualizarIdBD()
@@ -245,10 +231,10 @@ class ArticuloHandler:
             raise
 
     def _modificarDescripcion(self):
-        if "descripcion" in self.cambios.dict(exclude_unset=True):
+        if "meli_descripcion" in self.cambios.dict(exclude_unset=True):
             r = self.session.put(
-                f'items/{self.OldImage.ID["articulo"]}/description',
-                json={'plain_text': self.cambios.descripcion
+                f'items/{self.OldImage.meli_ID["articulo"]}/description',
+                json={'plain_text': self.cambios.meli_descripcion
                       or "Sin descripción."}
             )
             r.raise_for_status()
@@ -260,13 +246,13 @@ class ArticuloHandler:
         urls_anexados = list(
             set(self.cambios.imagen_url) - set(self.OldImage.imagen_url)
         )
-        self.OldImage.ID['imagenes'] |= {
+        self.OldImage.meli_ID['imagenes'] |= {
             img: self._cargarImagen(img)
             for img in urls_anexados
         }
         if "imagen_url" in self.cambios.dict(exclude_unset=True):
             return [
-                {'id': self.OldImage.ID['imagenes'][fname]}
+                {'id': self.OldImage.meli_ID['imagenes'][fname]}
                 for fname in self.cambios.imagen_url
             ]
         else:
@@ -291,7 +277,7 @@ class ArticuloHandler:
         logger.debug(articuloInput)
         if articuloInput:
             response = self.session.put(
-                f'items/{self.OldImage.ID["articulo"]}',
+                f'items/{self.OldImage.meli_ID["articulo"]}',
                 json=articuloInput
             )
             response.raise_for_status()
@@ -320,7 +306,7 @@ class ArticuloHandler:
             try:
                 if self.cambios.dict(exclude_unset=True):
                     logger.info("Se aplicarán los cambios en MercadoLibre.")
-                    if not self.OldImage.ID:
+                    if not self.OldImage.meli_ID:
                         logger.info(
                             "En el evento no se encontró el ID de "
                             "MercadoLibre proveniente de la base de "

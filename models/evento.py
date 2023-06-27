@@ -29,7 +29,7 @@ class Marticulo(BaseModel):
 
 
 class Marticulo_meli(Marticulo):
-    descripcion: str | None = ""
-    categoria: str | None = "MLV3530"
-    tipo_publicacion: Literal["free", "bronze", "gold_special"] = "free"
-    ID: dict[str, str | dict[str, str]] | None = {}
+    meli_descripcion: str | None = ""
+    meli_categoria: str | None = "MLV3530"
+    meli_tipo_publicacion: Literal["free", "bronze", "gold_special"] = "free"
+    meli_ID: dict[str, str | dict[str, str]] | None = {}

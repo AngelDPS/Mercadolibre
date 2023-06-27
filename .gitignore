@@ -8,6 +8,6 @@ enviroment.json
 meli.json
 test_event.json
 test.py
-articulo.py
+/articulo.py
 jsonDB.py
 meli.zip
