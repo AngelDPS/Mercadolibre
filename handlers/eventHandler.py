@@ -1,10 +1,9 @@
 from boto3.dynamodb.types import TypeDeserializer
-from handlers.articuloHandler import (
-    ArticuloHandler as meli_ArticuloHandler
-)
-from logging import getLogger
+from libs.util import ItemHandler, get_parameter
+from aws_lambda_powertools import Logger
 
-logger = getLogger(__name__)
+logger = Logger(service="event_handler",
+                level=get_parameter("loglevel") or "WARNING")
 
 
 class EventHandler:
@@ -31,49 +30,20 @@ class EventHandler:
             raise
 
     @staticmethod
-    def formatearEvento(evento: dict) -> tuple[dict | None]:
-        """Recibe el evento y lo formatea, regresando las imágenes
-        (Old y New) de la data enviada por la base de datos para su posterior
-        manipulación.
-
-        Args:
-            evento (dict): Evento mandado por una acción de DynamoDB.
-
-        Returns:
-            tuple[Mimage | None]: Tupla con las imágenes modeladas de la base
-            de datos, New y Old, deserealizadas. En caso de no haber OldImage
-            el segundo valor es igual a None.
-        """
-        try:
-            resultado = evento['dynamodb']
-            resultado['NewImage'] = EventHandler.deserializar(
-                resultado['NewImage']
-            )
-            resultado['OldImage'] = EventHandler.deserializar(
-                resultado.get('OldImage', {})
-            )
-            return resultado['NewImage'], resultado['OldImage']
-        except KeyError:
-            logger.exception("Formato inesperado para el evento.\n"
-                             "El evento debería tener los objetos\n"
-                             '{\n\t...,\n\t"dynamobd": {\n\t\t...\n\t\t'
-                             '"NewImage": ...\n\t}\n}')
-            raise
-
-    @staticmethod
     def obtenerCambios(NewImage: dict, OldImage: dict) -> dict:
-        """Obtiene los cambios realizados entre dos imágenes, anterior y
-        posterior, de un ítem.
+        """Obtiene los cambios realizados entre dos diccionarios, con
+        versiones posterior y previa.
+        Los cambios se obtienen de forma recursiva. Es decir, se obtienen los
+        cambios entre los diccionarios principales y los diccionarios anidados
+        en los mismos.
 
         Args:
-            NewImage (Mimage): Modelo de los dátos de la tabla de DynamoDB
-            con la imagen del ítem antes de ser modificado.
-            OldImage (Mimage): Modelo de los dátos de la tabla de DynamoDB
-            con la imagen del ítem modificado
+            NewImage (dict): Diccionario con data posterior.
+            OldImage (dict): Diccionario con data previa.
 
         Returns:
-            Mimage | None: Modelo con los campos de la base de datos que
-            sufrieron cambios o None en caso de no haber ninguno
+            dict: Diccionario con las entradas que fueron modificadas entre las
+            versiones, con los valores del diccionario posterior.
         """
         cambios = {}
         for k, v in OldImage.items():
@@ -85,41 +55,65 @@ class EventHandler:
         cambios |= {k: v for k, v in NewImage.items() if k not in OldImage}
         return cambios
 
-    def __init__(self, evento: dict):
+    @staticmethod
+    def formatearEvento(evento: dict) -> tuple[dict]:
+        """Recibe el evento y lo formatea, regresando la imagen anterior
+        y los cambios realizados de la data enviada por la base de datos
+        para su posterior manipulación.
+
+        Args:
+            evento (dict): Evento mandado por una acción de DynamoDB.
+
+        Returns:
+            tuple[dict]: Tupla con los diccionarios deserealizados de los
+            cambios registrados por el evento y la imagen previa a los cambios.
+        """
+        try:
+            NewImage = EventHandler.deserializar(
+                evento['dynamodb']['NewImage']
+            )
+            OldImage = EventHandler.deserializar(
+                evento['dynamodb'].get('OldImage', {})
+            )
+            cambios = EventHandler.obtenerCambios(NewImage, OldImage)
+            logger.debug(f'{cambios = }')
+            return cambios, OldImage
+        except KeyError:
+            logger.exception("Formato inesperado para el evento.\n"
+                             "El evento debería tener los objetos\n"
+                             '{\n\t...,\n\t"dynamobd": {\n\t\t...\n\t\t'
+                             '"NewImage": ...\n\t}\n}')
+            raise
+
+    def __init__(self, evento: dict, handler_mapping: dict[str, ItemHandler]):
         """Constructor de la instancia encargada de procesar el evento
 
         Args:
             evento (dict): Evento accionado por DynamoDB.
         """
-        self.eventName = evento['eventName']
-        self.NewImage, self.OldImage = self.formatearEvento(evento)
-        self.cambios = self.obtenerCambios(self.NewImage, self.OldImage)
-        logger.debug(f'{self.cambios = }')
+        self.cambios, self.OldImage = self.formatearEvento(evento)
+        self.handler_mapping = handler_mapping
 
     @property
-    def handler(self):
-        """Obtiene un manipulador según el tipo de registro que accionó el
-        evento.
+    def handler(self) -> ItemHandler:
+        """Obtiene un handler para el evento según el entity del ítem que
+        provocó el evento.
 
         Returns:
             ProductoHandler: El manipulador adecuado para el evento del
             registro.
         """
         try:
-            handler = {
-                'articulos': meli_ArticuloHandler,
-            }
-            handler = handler[self.NewImage['entity']]
-            logger.info("El evento corresponde a una entidad de "
-                        f"{self.NewImage['entity']} y será procesado por "
-                        f"el {handler}.")
+            handler = self.handler_mapping[self.OldImage.get('entity')
+                                           or self.cambios.get('entity')]
+            logger.info(f"El evento será procesado por {handler}.")
             return handler
         except KeyError as err:
-            msg = ("El evento corresponde a una entidad de "
-                   f"{self.NewImage['entity']}, cuyo proceso no está "
-                   "implementado.")
-            logger.exception(msg)
-            raise NotImplementedError(msg) from err
+            raise NotImplementedError(
+                "El evento corresponde a una entidad de "
+                f"{self.OldImage.get('entity') or self.cambios.get('entity')}"
+                ", cuyo proceso no está implementado."
+            ) from err
 
     def ejecutar(self) -> dict[str, str]:
         """Método encargado de ejecutar la acción solicitada por el evento ya

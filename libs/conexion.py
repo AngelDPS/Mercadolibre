@@ -7,7 +7,7 @@ from requests_oauthlib import OAuth2Session
 from logging import getLogger
 from decimal import Decimal
 
-logger = getLogger(__name__)
+logger = getLogger("meli.conexion")
 
 
 class MeLiConexion(OAuth2Session):

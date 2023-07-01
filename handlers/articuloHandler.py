@@ -9,14 +9,14 @@ from models.articulo import (
 )
 from models.evento import Marticulo_meli as Marticulo
 from libs.conexion import MeLiConexion
-from libs.util import get_parameter
+from libs.util import get_parameter, ItemHandler
 from re import search
 from os import getenv
 import requests
 import boto3
 from enum import Enum
 
-logger = getLogger(__name__)
+logger = getLogger("meli.articuloHandler")
 s3_client = boto3.client('s3', region_name=getenv("AWS_REGION"),
                          config=boto3.session.Config(signature_version='s3v4'))
 
@@ -45,7 +45,7 @@ class TipoPublicacion(Enum):
     PREMIUM = "gold_special"
 
 
-class ArticuloHandler:
+class ArticuloHandler(ItemHandler):
 
     def __init__(self, evento):
         """Constructor de la clase
@@ -259,8 +259,8 @@ class ArticuloHandler:
             return None
 
     def _cambioCantidad(self):
-        stock_new = (self.cambios.stock_act or self.OldImage.stock_act
-                     - self.cambios.stock_com or self.OldImage.stock_com)
+        stock_new = ((self.cambios.stock_act or self.OldImage.stock_act)
+                     - (self.cambios.stock_com or self.OldImage.stock_com))
         stock_old = (self.OldImage.stock_act - self.OldImage.stock_com)
         if stock_new != stock_old:
             return stock_new
@@ -286,6 +286,8 @@ class ArticuloHandler:
             return "Producto no modificado."
 
     def modificar(self) -> list[str]:
+        logger.debug(f"{self.cambios = }")
+        logger.debug(f"{self.OldImage = }")
         try:
             respuestas = []
             respuestas.append(self._modificarDescripcion())
@@ -303,33 +305,7 @@ class ArticuloHandler:
             ejecutadas.
         """
         if self.procesar:
-            try:
-                if self.cambios.dict(exclude_unset=True):
-                    logger.info("Se aplicarán los cambios en MercadoLibre.")
-                    if not self.OldImage.meli_ID:
-                        logger.info(
-                            "En el evento no se encontró el ID de "
-                            "MercadoLibre proveniente de la base de "
-                            "datos. Se asume que el articulo "
-                            "correspondiente no existe en MercadoLibre."
-                            " Se creará un articulo nuevo con la data "
-                            "actualizada."
-                        )
-                        self.cambios = Marticulo.parse_obj(
-                            self.OldImage.dict()
-                            | self.cambios.dict(exclude_unset=True)
-                        )
-                        respuesta = self.crear()
-                    else:
-                        respuesta = self.modificar()
-                else:
-                    logger.info("Los cambios encontrados no ameritan "
-                                "actualizaciones en MercadoLibre.")
-                    respuesta = ["No se realizaron acciones."]
-            except Exception:
-                logger.exception("Ocurrió un problema ejecutando la acción "
-                                 "sobre el producto.")
-                raise
+            respuesta = super().ejecutar("MercadoLibre", self.OldImage.meli_ID)
         else:
             logger.info("El artículo no está habilitado para procesarse en "
                         "MercadoLibre.")
