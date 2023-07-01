@@ -5,7 +5,7 @@ from logging import getLogger
 
 dynamodb = boto3.resource("dynamodb")
 tabla = dynamodb.Table(f"{getenv('NOMBRE_COMPANIA')}-db")
-logger = getLogger(__name__)
+logger = getLogger("meli.dynamodb")
 
 
 def guardar_MeliIdArticulo(PK: str, SK: str, ID: str):
