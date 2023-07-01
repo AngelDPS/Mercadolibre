@@ -1,5 +1,6 @@
 from boto3.dynamodb.types import TypeDeserializer
 from libs.util import ItemHandler, get_parameter
+from handlers.sqsHandler import obtener_eventos_en_cola
 from aws_lambda_powertools import Logger
 
 logger = Logger(service="event_handler",
@@ -100,7 +101,7 @@ class EventHandler:
         provocó el evento.
 
         Returns:
-            ProductoHandler: El manipulador adecuado para el evento del
+            ItemHandler: El manipulador adecuado para el evento del
             registro.
         """
         try:
@@ -129,3 +130,34 @@ class EventHandler:
         except Exception:
             logger.exception("Ocurrió un error ejecutando el evento.")
             raise
+
+
+def procesar_todo(service_name: str, evento: list[dict],
+                  handler_mapping: dict[str, ItemHandler]):
+    eventos_en_cola = obtener_eventos_en_cola(service_name=service_name,
+                                              evento_nuevo=evento)
+    r = []
+
+    logger.info("Eventos para procesar: "
+                f"{[ev.contenido[0] for ev in eventos_en_cola]}")
+
+    for n, evento in enumerate(eventos_en_cola):
+        try:
+            for ev in evento.contenido:
+                r.append(EventHandler(ev, handler_mapping).ejecutar())
+                logger.debug(r[-1])
+        except NotImplementedError:
+            logger.warning("La acción requerida no está implementada y se "
+                           "ignorará el evento.")
+            continue
+        except Exception as err:
+            mensaje = (f"Ocurrió un error manejado el evento:\n{ev}."
+                       f"Se levantó la excepción '{err}'.")
+            logger.exception(mensaje)
+            if n == 0:
+                raise Exception(mensaje) from err
+            continue
+        else:
+            evento.borrar_de_cola()
+
+    return r
