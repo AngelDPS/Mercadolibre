@@ -16,6 +16,14 @@ def guardar_MeliIdArticulo(PK: str, SK: str, ID: str):
     )
 
 
+def guardar_meli_error(PK: str, SK: str, cause_msg: str):
+    tabla.update_item(
+        Key={"PK": PK, "SK": SK},
+        UpdateExpression="SET meli_error = :msg",
+        ExpressionAttributeValues={":msg": cause_msg}
+    )
+
+
 def obtener_MeliAccessToken(codigoCompania: str,
                             codigoTienda: str) -> dict:
     key = {

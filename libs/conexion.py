@@ -1,9 +1,11 @@
 from libs.dynamodb import (
     obtener_MeliAccessToken,
     guardar_MeliAccessToken,
-    obtener_MeliClientCredentials
+    obtener_MeliClientCredentials,
+    guardar_meli_error
 )
 from requests_oauthlib import OAuth2Session
+from requests.exceptions import HTTPError
 from logging import getLogger
 from decimal import Decimal
 
@@ -62,11 +64,13 @@ class MeLiConexion(OAuth2Session):
 
     def request(
         self,
-        method,
-        meLi_resource,
-        data=None,
-        headers=None,
-        withhold_token=False,
+        method: str,
+        meLi_resource: str,
+        data: dict = None,
+        headers: dict = None,
+        withhold_token: bool = False,
+        PK: str = "",
+        SK: str = "",
         **kwargs
     ):
         meLi_api = 'https://api.mercadolibre.com/'
@@ -82,4 +86,10 @@ class MeLiConexion(OAuth2Session):
         logger.debug(f'Retornó un status {response.status_code}'
                      f'\t{response.reason}\nContenido:\n{response.text}'
                      f'\nHeaders:\n{response.headers}')
+        if 400 <= response.status_code < 500:
+            error_msg = response.json.get("cause", {}).get("message")
+            logger.error(error_msg)
+            if PK and SK:
+                guardar_meli_error(PK, SK, error_msg)
+            raise HTTPError(error_msg)
         return response
