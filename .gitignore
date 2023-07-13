@@ -1,10 +1,12 @@
 *__pycache__
 *.venv
 *.vscode
-logs*
 meli.zip
 *__init__.py
 sam*
 template.yaml
 events*
 tests*
+*aws-sam
+*.json
+cargar_articulos_dynamo.py

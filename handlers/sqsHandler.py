@@ -2,38 +2,61 @@ import json
 import boto3
 from aws_lambda_powertools import Logger
 from libs.util import obtener_codigo, get_parameter
+from os import getenv
 
 logger = Logger(service="sqs_handler",
                 level=get_parameter("loglevel") or "WARNING")
-sqs_client = boto3.client("sqs")
 
 
-def _receive_messages(sqs_url: str) -> list[dict]:
+def _receive_messages(service_name: str) -> list:
     """Consulta los mensajes en la cola de SQS que resultaron de un error
     al manejar el evento.
 
     Returns:
         list[dict]: Lista con todos los mensajes en cola en SQS.
     """
-    response = sqs_client.receive_message(
-        QueueUrl=sqs_url,
+    param_key = f"{service_name.upper()}_SQSURL"
+    sqs_url = get_parameter(param_key)
+    if sqs_url is None:
+        raise ValueError(
+            f"""No se encontró el valor para {param_key} en el parámetro
+            consultado.
+            Asegúrese que el parámetro esté configurado correctamente.
+            """
+        )
+    if getenv('ENV') == 'local':
+        session = boto3.Session(profile_name='angel')
+    else:
+        session = boto3
+    sqs_queue = (
+        session.resource('sqs', region_name="us-east-2").Queue(url=sqs_url)
+    )
+    messages = sqs_queue.receive_messages(
         MaxNumberOfMessages=10,
         WaitTimeSeconds=1,
     )
-    logger.info(f"Se recibieron {len(response.get('Messages', []))} "
-                "eventos NO procesados en cola.")
-    return response
+    logger.info(f"Se recibieron {len(messages)} eventos "
+                "NO procesados en cola.")
+    return messages
 
 
 class EventoEnCola:
 
-    def __init__(self, contenido: list[dict],
-                 receipt_handle: str = "",
-                 sqs_url: str = ""):
-        self.contenido = contenido
-        self.ids = [receipt_handle] if receipt_handle else []
-        self.sqs_url = sqs_url or None
-        self.codigo = obtener_codigo(contenido)
+    def __init__(self, mensaje=None,
+                 dynamo_data: list[dict] = None):
+        if mensaje is not None:
+            self.mensajes = [mensaje]
+            self.contenido = json.loads(mensaje.body)
+        else:
+            self.mensajes = []
+        if dynamo_data is not None:
+            self.contenido = dynamo_data
+        elif mensaje is None:
+            raise ValueError(
+                "Para crear un evento en cola hace falta un mensaje de SQS o "
+                "un data stream de Dynamo."
+            )
+        self.codigo = obtener_codigo(self.contenido)
 
     def __eq__(self, other):
         if isinstance(other, EventoEnCola):
@@ -45,28 +68,22 @@ class EventoEnCola:
         return str(self.contenido)
 
     def borrar_de_cola(self, only_last: bool = False):
-        if self.sqs_url is not None:
+        if self.mensajes:
             if only_last:
-                sqs_client.delete_message(
-                    QueueUrl=self.sqs_url,
-                    ReceiptHandle=self.ids.pop(),
-                )
+                self.mensajes.pop.delete()
             else:
-                [sqs_client.delete_message(
-                    QueueUrl=self.sqs_url,
-                    ReceiptHandle=id,
-                ) for id in self.ids]
+                [mensaje.delete() for mensaje in self.mensajes]
 
     def unir_eventos(self, other):
         if self == other:
-            while len(self.ids) >= 2:
+            while len(self.mensajes) >= 2:
                 logger.info("El evento ya se había repetido, "
                             "se eliminará el mensaje repetido anterior.")
                 self.borrar_de_cola(only_last=True)
             self.contenido[0]["dynamodb"]["NewImage"] = (
                 other.contenido[0]["dynamodb"]["NewImage"]
             )
-            self.ids.extend(other.ids)
+            self.mensajes.extend(other.mensajes)
 
 
 def obtener_eventos_en_cola(
@@ -87,44 +104,28 @@ def obtener_eventos_en_cola(
     Returns:
         dict[str, EventoEnCola]:
     """
-    param_key = f"{service_name.upper()}_SQSURL"
-    sqs_url = get_parameter(param_key)
-    if sqs_url is None:
-        raise ValueError(
-            f"""No se encontró el valor para {param_key} en el parámetro
-            consultado.
-            Asegúrese que el parámetro esté configurado correctamente.
-            """
-        )
+    cola = [EventoEnCola(mensaje=msj)
+            for msj in _receive_messages(service_name)]
+    for idx, evento in enumerate(cola):
+        logger.debug(f"Evento {idx+1} = {evento}")
 
-    cola = []
-
-    for n, mensaje in enumerate(
-            _receive_messages(sqs_url).get("Messages", [])
-    ):
-        evento_q = EventoEnCola(
-            contenido=json.loads(mensaje["Body"]),
-            receipt_handle=mensaje['ReceiptHandle'],
-            sqs_url=sqs_url
-        )
-        logger.debug(f"Evento {n+1} = {evento_q}")
-
-        if not evento_q.codigo:
+        if not evento.codigo:
             logger.info(
-                f"El evento {n+1} en cola corresponde a una entidad "
+                f"El evento {idx+1} en cola corresponde a una entidad "
                 "cuyo proceso no está implementado y se eliminará.")
-            evento_q.borrar_de_cola()
+            evento.borrar_de_cola()
+            del cola[idx]
             continue
 
-        if evento_q in cola:
+        first_idx = cola.index(evento)
+        if idx != first_idx:
             logger.info(
-                f"Evento {n+1} repetido en la cola para {evento_q.codigo}"
+                f"Evento {idx+1} repetido en la cola para {evento.codigo}"
             )
-            cola[cola.index(evento_q)].unir_eventos(evento_q)
-        else:
-            cola.append(evento_q)
+            cola[first_idx].unir_eventos(evento)
+            del cola[idx]
 
-    evento_nuevo = EventoEnCola(evento_nuevo)
+    evento_nuevo = EventoEnCola(dynamo_data=evento_nuevo)
     if evento_nuevo in cola:
         logger.warning(
             f'Se encontraron eventos en cola para para "{evento_nuevo.codigo}"'

@@ -1,30 +1,30 @@
 from libs.dynamodb import (
-    obtener_MeliAccessToken,
-    guardar_MeliAccessToken,
-    obtener_MeliClientCredentials,
+    obtener_meli_access_token,
+    guardar_meli_access_token,
+    obtener_meli_client_credentials,
     guardar_meli_error
 )
 from requests_oauthlib import OAuth2Session
 from requests.exceptions import HTTPError
-from logging import getLogger
 from decimal import Decimal
+from aws_lambda_powertools import Logger
 
-logger = getLogger("meli.conexion")
+logger = Logger(child=True)
 
 
-class MeLiConexion(OAuth2Session):
+class MeliConexion(OAuth2Session):
     token_url = r"https://api.mercadolibre.com/oauth/token"
-    codigoCompania: str
-    codigoTienda: str
+    CODIGO_COMPANIA: str
+    CODIGO_TIENDA: str
 
     def token_updater(self, token: dict):
         for k, v in token.items():
             if isinstance(v, float):
                 token[k] = Decimal(v)
-        guardar_MeliAccessToken(self. codigoCompania, self.codigoTienda,
-                                token)
+        guardar_meli_access_token(self.CODIGO_COMPANIA, self.CODIGO_TIENDA,
+                                  token)
 
-    def _fetchToken(self):
+    def _fetch_token(self):
         authorization_url, state = self.authorization_url(
             'https://auth.mercadolibre.com.ve/authorization'
         )
@@ -38,10 +38,11 @@ class MeLiConexion(OAuth2Session):
         )
         self.token_updater(self.token)
 
-    def __init__(self, codigoCompania: str, codigoTienda: str, **kwargs):
-        self.codigoCompania = codigoCompania
-        self.codigoTienda = codigoTienda
-        client = obtener_MeliClientCredentials(codigoCompania, codigoTienda)
+    def __init__(self, codigo_compania: str, codigo_tienda: str, **kwargs):
+        self.CODIGO_COMPANIA = codigo_compania
+        self.CODIGO_TIENDA = codigo_tienda
+        client = obtener_meli_client_credentials(codigo_compania,
+                                                 codigo_tienda)
         super().__init__(client['client_id'],
                          # redirect_uri=config['redirect_uri'],
                          auto_refresh_url=self.token_url,
@@ -49,8 +50,8 @@ class MeLiConexion(OAuth2Session):
                          token_updater=self.token_updater,
                          **kwargs)
         try:
-            self.token = obtener_MeliAccessToken(self.codigoCompania,
-                                                 self.codigoTienda)
+            self.token = obtener_meli_access_token(self.CODIGO_COMPANIA,
+                                                   self.CODIGO_TIENDA)
             logger.debug(f"{self.token = }")
         except KeyError:
             self.warning("No se pudo obtener el refresh token."
@@ -60,12 +61,12 @@ class MeLiConexion(OAuth2Session):
                                  "preexistente, se debe suministrar el "
                                  "'redirect_uri' para procurar un nuevo "
                                  "token.")
-            self._fetchToken()
+            self._fetch_token()
 
     def request(
         self,
         method: str,
-        meLi_resource: str,
+        meli_resource: str,
         data: dict = None,
         headers: dict = None,
         withhold_token: bool = False,
@@ -73,9 +74,9 @@ class MeLiConexion(OAuth2Session):
         SK: str = "",
         **kwargs
     ):
-        meLi_api = 'https://api.mercadolibre.com/'
-        url = (meLi_api + meLi_resource
-               if meLi_api not in meLi_resource else meLi_resource)
+        meli_api = 'https://api.mercadolibre.com/'
+        url = (meli_api + meli_resource
+               if meli_api not in meli_resource else meli_resource)
         response = super().request(method,
                                    url,
                                    data,

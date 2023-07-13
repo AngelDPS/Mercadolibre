@@ -1,49 +1,58 @@
 import boto3
 from botocore.exceptions import ClientError
 from os import getenv
-from logging import getLogger
+from aws_lambda_powertools import Logger
 
-dynamodb = boto3.resource("dynamodb")
-tabla = dynamodb.Table(f"{getenv('NOMBRE_COMPANIA')}-db")
-logger = getLogger("meli.dynamodb")
+logger = Logger(child=True)
 
 
-def guardar_MeliIdArticulo(PK: str, SK: str, ID: str):
-    tabla.update_item(
+def obtener_tabla():
+    if getenv('ENV') == 'local':
+        session = boto3.Session(profile_name='angel')
+    else:
+        session = boto3
+    return (
+        session.resource("dynamodb").Table(f"{getenv('NOMBRE_COMPANIA')}-db")
+    )
+
+
+def guardar_articulo_meli_id(PK: str, SK: str, ID: str):
+    obtener_tabla().update_item(
         Key={"PK": PK, "SK": SK},
-        UpdateExpression="SET meli_ID = :ID",
+        UpdateExpression="SET meli_id = :ID",
         ExpressionAttributeValues={":ID": ID}
     )
 
 
 def guardar_meli_error(PK: str, SK: str, cause_msg: str):
-    tabla.update_item(
+    obtener_tabla().update_item(
         Key={"PK": PK, "SK": SK},
         UpdateExpression="SET meli_error = :msg",
         ExpressionAttributeValues={":msg": cause_msg}
     )
 
 
-def obtener_MeliAccessToken(codigoCompania: str,
-                            codigoTienda: str) -> dict:
+def obtener_meli_access_token(codigo_compania: str,
+                              codigo_tienda: str) -> dict:
     key = {
-        "PK": f"{codigoCompania.upper()}#TIENDAS",
-        "SK": f"T#{codigoTienda.upper()}"
+        "PK": f"{codigo_compania.upper()}#TIENDAS",
+        "SK": f"T#{codigo_tienda.upper()}"
     }
-    return tabla.get_item(
+    return obtener_tabla().get_item(
         Key=key,
         ProjectionExpression="meli.refresh_token"
     )['Item']['meli']['refresh_token']
 
 
-def guardar_MeliAccessToken(codigoCompania: str,
-                            codigoTienda: str,
-                            token: dict):
+def guardar_meli_access_token(codigo_compania: str,
+                              codigo_tienda: str,
+                              token: dict):
     key = {
-        "PK": f"{codigoCompania.upper()}#TIENDAS",
-        "SK": f"T#{codigoTienda.upper()}"
+        "PK": f"{codigo_compania.upper()}#TIENDAS",
+        "SK": f"T#{codigo_tienda.upper()}"
     }
     try:
+        tabla = obtener_tabla()
         tabla.update_item(
             Key=key,
             UpdateExpression="SET meli.refresh_token = :refresh_token",
@@ -66,13 +75,13 @@ def guardar_MeliAccessToken(codigoCompania: str,
             raise
 
 
-def obtener_MeliClientCredentials(codigoCompania: str,
-                                  codigoTienda: str) -> dict[str, str]:
+def obtener_meli_client_credentials(codigo_compania: str,
+                                    codigo_tienda: str) -> dict[str, str]:
     key = {
-        "PK": f"{codigoCompania.upper()}#TIENDAS",
-        "SK": f"T#{codigoTienda.upper()}"
+        "PK": f"{codigo_compania.upper()}#TIENDAS",
+        "SK": f"T#{codigo_tienda.upper()}"
     }
-    client = tabla.get_item(
+    client = obtener_tabla().get_item(
         Key=key,
         ProjectionExpression="meli.client"
     )
