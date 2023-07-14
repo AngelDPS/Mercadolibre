@@ -1,11 +1,9 @@
 from typing import Any
 from aws_lambda_powertools import Logger
-from libs.util import get_parameter
 from handlers.eventHandler import procesar_todo
 from handlers.articuloHandler import ArticuloHandler
 
-logger = Logger(service="meli",
-                level=get_parameter("loglevel") or "WARNING")
+logger = Logger()
 
 
 @logger.inject_lambda_context(log_event=True)

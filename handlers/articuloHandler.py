@@ -45,6 +45,7 @@ class TipoPublicacion(Enum):
 
 
 class ArticuloHandler(ItemHandler):
+    item = "articulo"
 
     def __init__(self, evento):
         """Constructor de la clase
@@ -75,6 +76,7 @@ class ArticuloHandler(ItemHandler):
 
             self.cambios = evento.cambios
             self.cambios.pop('meli_id', None)
+            self.cambios.pop('meli_error', None)
             if campo_precio in self.cambios:
                 self.cambios['precio'] = self.cambios[campo_precio]
             if ('habilitado' in self.cambios
@@ -186,7 +188,9 @@ class ArticuloHandler(ItemHandler):
         logger.debug(articulo_input)
         response = self.session.post(
             'items',
-            json=articulo_input
+            json=articulo_input,
+            PK=self.cambios.PK or self.old_image.PK,
+            SK=self.cambios.SK or self.old_image.SK
         )
         id_dict = {
             'articulo': response.json()['id']
@@ -221,9 +225,9 @@ class ArticuloHandler(ItemHandler):
                 for img in self.cambios.imagen_url
             }}
             self.old_image.meli_id |= self._crear()
+            self.dynamo_guardar_meli_id()
             self._agregar_descripcion()
             self._establecer_estatus()
-            self.dynamo_guardar_meli_id()
             return ["Producto creado!"]
         except Exception:
             logger.exception("No fue posible crear el producto.")
@@ -277,7 +281,9 @@ class ArticuloHandler(ItemHandler):
         if articulo_input:
             response = self.session.put(
                 f'items/{self.old_image.meli_id["articulo"]}',
-                json=articulo_input
+                json=articulo_input,
+                PK=self.cambios.PK or self.old_image.PK,
+                SK=self.cambios.SK or self.old_image.SK
             )
             response.raise_for_status()
             return "Producto Modificado"

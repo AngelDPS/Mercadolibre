@@ -8,7 +8,7 @@ logger = Logger(child=True)
 
 def obtener_tabla():
     if getenv('ENV') == 'local':
-        session = boto3.Session(profile_name='angel')
+        session = boto3.Session(profile_name=getenv('AWS_PROFILE'))
     else:
         session = boto3
     return (
@@ -24,7 +24,7 @@ def guardar_articulo_meli_id(PK: str, SK: str, ID: str):
     )
 
 
-def guardar_meli_error(PK: str, SK: str, cause_msg: str):
+def guardar_meli_error(PK: str, SK: str, cause_msg: list):
     obtener_tabla().update_item(
         Key={"PK": PK, "SK": SK},
         UpdateExpression="SET meli_error = :msg",
@@ -64,7 +64,7 @@ def guardar_meli_access_token(codigo_compania: str,
         if err.response['Error']['Code'] == 'ValidationException':
             tabla.update_item(
                 Key=key,
-                UpdateExpression="SET meLi = :dict",
+                UpdateExpression="SET meli = :dict",
                 ExpressionAttributeValues={
                     ":dict": {
                         "token": token

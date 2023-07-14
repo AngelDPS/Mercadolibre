@@ -88,7 +88,8 @@ class MeliConexion(OAuth2Session):
                      f'\t{response.reason}\nContenido:\n{response.text}'
                      f'\nHeaders:\n{response.headers}')
         if 400 <= response.status_code < 500:
-            error_msg = response.json.get("cause", {}).get("message")
+            error_msg = [cause.get("message")
+                         for cause in response.json().get("cause", {})]
             logger.error(error_msg)
             if PK and SK:
                 guardar_meli_error(PK, SK, error_msg)

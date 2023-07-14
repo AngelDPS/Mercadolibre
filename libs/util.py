@@ -1,9 +1,12 @@
-from aws_lambda_powertools.utilities import parameters
+from aws_lambda_powertools.utilities.parameters import SSMProvider
+from boto3 import Session
 from os import getenv
 from abc import ABC, abstractmethod
 from pydantic import BaseModel
 from typing import Any
 from aws_lambda_powertools import Logger
+
+logger = Logger(service="utilities")
 
 
 def get_parameter(key: str) -> Any:
@@ -18,32 +21,37 @@ def get_parameter(key: str) -> Any:
     Returns:
         Any: Valor obtenido del json almacenado en el parámetro.
     """
-    parameter = f"/akia9/akiastock/{getenv('NOMBRE_COMPANIA')}"
-    return parameters.get_parameter(parameter, transform="json",
-                                    max_age=300).get(key)
+    if getenv('ENV') == 'local':
+        ssm_provider = SSMProvider(
+            boto3_session=Session(profile_name=getenv('AWS_PROFILE'))
+        )
+    else:
+        ssm_provider = SSMProvider()
+    return ssm_provider.get(
+        f"/akia9/akiastock/{getenv('NOMBRE_COMPANIA')}",
+        transform="json",
+        max_age=300
+    ).get(key)
 
 
-logger = Logger(service="utilities", level=get_parameter("loglevel"))
-
-
-def obtener_codigo(evento: list[dict]) -> str | None:
+def obtener_codigo(record: dict) -> str | None:
     """Obtiene el código identificador de la entidad del ítem de DynamoDB
-    que generó el evento.
+    que generó el record.
 
     Args:
-        evento (list[dict]): Evento recibido por Lambda para ser procesado
+        record (list[dict]): Evento recibido por Lambda para ser procesado
         debido a cambios en DynamoDB.
 
     Returns:
         str | None: Código  único del ítem de DynamoDB para la entidad.
     """
-    match evento[0]["dynamodb"]["NewImage"]["entity"]["S"]:
+    match record["dynamodb"]["NewImage"]["entity"]["S"]:
         case "articulos":
-            return evento[0]["dynamodb"]["NewImage"]["co_art"]["S"]
+            return record["dynamodb"]["NewImage"]["co_art"]["S"]
         case "lineas":
-            return evento[0]["dynamodb"]["NewImage"]["co_lin"]["S"]
+            return record["dynamodb"]["NewImage"]["co_lin"]["S"]
         case "tiendas":
-            return evento[0]["dynamodb"]["NewImage"]["codigoTienda"]["S"]
+            return record["dynamodb"]["NewImage"]["codigoTienda"]["S"]
         case _:
             return None
 

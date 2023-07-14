@@ -4,8 +4,7 @@ from aws_lambda_powertools import Logger
 from libs.util import obtener_codigo, get_parameter
 from os import getenv
 
-logger = Logger(service="sqs_handler",
-                level=get_parameter("loglevel") or "WARNING")
+logger = Logger(service="sqs_handler")
 
 
 def _receive_messages(service_name: str) -> list:
@@ -37,13 +36,13 @@ def _receive_messages(service_name: str) -> list:
     )
     logger.info(f"Se recibieron {len(messages)} eventos "
                 "NO procesados en cola.")
-    return messages
+    return messages, sqs_queue
 
 
-class EventoEnCola:
+class RecordEnCola:
 
     def __init__(self, mensaje=None,
-                 dynamo_data: list[dict] = None):
+                 dynamo_data: dict = None):
         if mensaje is not None:
             self.mensajes = [mensaje]
             self.contenido = json.loads(mensaje.body)
@@ -56,10 +55,14 @@ class EventoEnCola:
                 "Para crear un evento en cola hace falta un mensaje de SQS o "
                 "un data stream de Dynamo."
             )
+        try:
+            self.contenido = self.contenido["Records"][0]
+        except IndexError:
+            self.contenido = self.contenido[0]
         self.codigo = obtener_codigo(self.contenido)
 
     def __eq__(self, other):
-        if isinstance(other, EventoEnCola):
+        if isinstance(other, RecordEnCola):
             return self.codigo == other.codigo
         else:
             False
@@ -74,38 +77,38 @@ class EventoEnCola:
             else:
                 [mensaje.delete() for mensaje in self.mensajes]
 
-    def unir_eventos(self, other):
+    def unir_records(self, other):
         if self == other:
             while len(self.mensajes) >= 2:
                 logger.info("El evento ya se había repetido, "
                             "se eliminará el mensaje repetido anterior.")
                 self.borrar_de_cola(only_last=True)
-            self.contenido[0]["dynamodb"]["NewImage"] = (
-                other.contenido[0]["dynamodb"]["NewImage"]
+            self.contenido["dynamodb"]["NewImage"] = (
+                other.contenido["dynamodb"]["NewImage"]
             )
             self.mensajes.extend(other.mensajes)
 
 
-def obtener_eventos_en_cola(
+def obtener_records_en_cola(
     service_name: str,
-    evento_nuevo: list[dict]
-) -> dict[str, EventoEnCola]:
+    evento_nuevo: dict
+) -> dict[str, RecordEnCola]:
     """Usando el `service_name`, consulta el parameter store por el campo
-    {SERVICE_NAME}_SQSURL, con este se consulta la cola de mensajes con eventos
+    {SERVICE_NAME}_SQSURL, con este se consulta la cola de mensajes con records
     no-procesados, y se analizan por casos de repeticiones entre si mismos y
-    `evento`.
+    `evento_nuevo`.
 
     Args:
         service_name (str): Nombre del servicio para formar el campo
         {SERVICE_NAME}_URL del parámetro en el parameter store.
-        evento (list[dict]): Evento para agregar al final del diccionario,
+        evento_nuevo (dict): Evento para agregar al final del diccionario,
         analizando por repetición.
 
     Returns:
-        dict[str, EventoEnCola]:
+        dict[str, RecordEnCola]:
     """
-    cola = [EventoEnCola(mensaje=msj)
-            for msj in _receive_messages(service_name)]
+    messages, sqs_queue = _receive_messages(service_name)
+    cola = [RecordEnCola(mensaje=msj) for msj in messages]
     for idx, evento in enumerate(cola):
         logger.debug(f"Evento {idx+1} = {evento}")
 
@@ -122,19 +125,19 @@ def obtener_eventos_en_cola(
             logger.info(
                 f"Evento {idx+1} repetido en la cola para {evento.codigo}"
             )
-            cola[first_idx].unir_eventos(evento)
+            cola[first_idx].unir_records(evento)
             del cola[idx]
 
-    evento_nuevo = EventoEnCola(dynamo_data=evento_nuevo)
-    if evento_nuevo in cola:
+    record_nuevo = RecordEnCola(dynamo_data=evento_nuevo)
+    if record_nuevo in cola:
         logger.warning(
-            f'Se encontraron eventos en cola para para "{evento_nuevo.codigo}"'
+            f'Se encontraron eventos en cola para para "{record_nuevo.codigo}"'
             ' siendo procesado.'
         )
-        idx = cola.index(evento_nuevo)
-        cola[idx].unir_eventos(evento_nuevo)
+        idx = cola.index(record_nuevo)
+        cola[idx].unir_records(record_nuevo)
         cola.insert(0, cola.pop(idx))
     else:
-        cola.insert(0, evento_nuevo)
+        cola.insert(0, record_nuevo)
 
-    return cola
+    return cola, sqs_queue

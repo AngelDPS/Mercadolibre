@@ -21,10 +21,10 @@ class MArticulo(BaseModel):
     stock_com: int | None = None
     codigo_barra: str | None = None
     referencia: str | None = None
-    marca: str | None = "N/A"
+    marca: str = "N/A"
     habilitado: bool | None | str = False
     imagen_url: list[str] | None = []
-    modelo: str | None = "N/A"
+    modelo: str = "N/A"
     # cobra_impuesto: bool = Field(False, alias='taxable')
 
 
