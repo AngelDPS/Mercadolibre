@@ -31,7 +31,7 @@ class Shipping(BaseModel):
     costs: list[ShippingCost] = []
 
 
-class MArticulo_input(BaseModel):
+class MArticuloInput(BaseModel):
     title: str = Field('', alias="art_des")
     condition: Literal["new", "used"] = "new"
     category_id: str | None = Field("MLV3530", alias="meli_categoria")

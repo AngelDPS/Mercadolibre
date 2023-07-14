@@ -9,7 +9,7 @@ class BaseModel(PydanticBaseModel):
         anystr_strip_whitespace = True
 
 
-class Marticulo(BaseModel):
+class MArticulo(BaseModel):
     PK: str | None = None
     SK: str | None = None
     art_des: str | None = ""
@@ -21,15 +21,15 @@ class Marticulo(BaseModel):
     stock_com: int | None = None
     codigo_barra: str | None = None
     referencia: str | None = None
-    marca: str | None = "N/A"
+    marca: str = "N/A"
     habilitado: bool | None | str = False
     imagen_url: list[str] | None = []
-    modelo: str | None = "N/A"
+    modelo: str = "N/A"
     # cobra_impuesto: bool = Field(False, alias='taxable')
 
 
-class Marticulo_meli(Marticulo):
+class MArticuloMeli(MArticulo):
     meli_descripcion: str | None = ""
     meli_categoria: str | None = "MLV3530"
     meli_tipo_publicacion: Literal["free", "bronze", "gold_special"] = "free"
-    meli_ID: dict[str, str | dict[str, str]] | None = {}
+    meli_id: dict[str, str | dict[str, str]] | None = {}
