@@ -21,9 +21,9 @@ def get_parameter(key: str) -> Any:
     Returns:
         Any: Valor obtenido del json almacenado en el parámetro.
     """
-    if getenv('ENV') == 'local':
+    if getenv("AWS_EXECUTION_ENV") is None:
         ssm_provider = SSMProvider(
-            boto3_session=Session(profile_name=getenv('AWS_PROFILE'))
+            boto3_session=Session(profile_name=getenv('AWS_PROFILE_NAME'))
         )
     else:
         ssm_provider = SSMProvider()
@@ -106,7 +106,10 @@ class ItemHandler(ABC):
             else:
                 logger.info("Los cambios encontrados no ameritan "
                             f"actualizaciones en {web_store}.")
-                respuesta = ["No se realizaron acciones."]
+                respuesta = {
+                    "statusCode": 200,
+                    "body": "No se realizaron cambios"
+                }
         except Exception:
             logger.info("Ocurrió un problema ejecutando la acción "
                         "sobre el producto.")
