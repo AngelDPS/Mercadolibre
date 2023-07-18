@@ -19,12 +19,12 @@ class MArticulo(BaseModel):
     precio: Decimal | None = None
     stock_act: int | None = None
     stock_com: int | None = None
-    codigo_barra: str | None = None
+    codigo_barra: str | None = "012345678905"
     referencia: str | None = None
-    marca: str = "N/A"
+    marca: str | None = "N/A"
     habilitado: bool | None | str = False
     imagen_url: list[str] | None = []
-    modelo: str = "N/A"
+    modelo: str | None = "N/A"
     # cobra_impuesto: bool = Field(False, alias='taxable')
 
 

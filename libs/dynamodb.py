@@ -47,6 +47,7 @@ def obtener_meli_access_token(codigo_compania: str,
 def guardar_meli_access_token(codigo_compania: str,
                               codigo_tienda: str,
                               token: dict):
+    logger.debug(f"Guardando access token en DynamoDB: {token}")
     key = {
         "PK": f"{codigo_compania.upper()}#TIENDAS",
         "SK": f"T#{codigo_tienda.upper()}"

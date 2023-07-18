@@ -1,7 +1,8 @@
 from typing import Any
 from aws_lambda_powertools import Logger
-from handlers.eventHandler import procesar_todo
+from handlers.eventHandler import procesar_todo, obtener_cambios
 from handlers.articuloHandler import ArticuloHandler
+from libs.util import filtro_campos_completos
 
 logger = Logger()
 
@@ -25,6 +26,33 @@ def lambda_handler(evento: list[dict],
         list[dict[str, str]]: Lista de diccionarios con los mensajes
         retornados por cada evento procesado.
     """
-    handler_mapping = {'articulos': ArticuloHandler}
-    respuestas = procesar_todo('meli', evento, handler_mapping)
-    return respuestas
+    try:
+        filtro_campos_completos(evento)
+    except ValueError:
+        return {
+            "statusCode": 400,
+            "body": "No se encontraron campos completos en el registro"
+        }
+
+    logger.info(f"Evento: {evento}")
+    try:
+        cambios = obtener_cambios(
+            evento["Records"][0]["dynamodb"]["NewImage"],
+            evento["Records"][0]["dynamodb"].get("OldImage", {})
+        )
+    except IndexError:
+        cambios = obtener_cambios(evento[0]["dynamodb"]["NewImage"],
+                                  evento[0]["dynamodb"].get("OldImage", {}))
+    cambios.pop("meli_id", None)
+    cambios.pop("meli_error", None)
+    logger.info(f"Cambios: {cambios}")
+    if not cambios:
+        logger.info("No se encontraron cambios en el registro")
+        return {
+            "statusCode": 201,
+            "body": "No se encontraron cambios en el registro"
+        }
+    else:
+        handler_mapping = {'articulos': ArticuloHandler}
+        respuestas = procesar_todo('meli', evento, handler_mapping)
+        return respuestas

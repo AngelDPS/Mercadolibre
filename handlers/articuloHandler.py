@@ -93,6 +93,10 @@ class ArticuloHandler(ItemHandler):
                     self.cambios['meli_tipo_publicacion'].upper()
                 ].value
             self.cambios = MArticulo.parse_obj(self.cambios)
+            if self.cambios.marca is None:
+                self.cambios.marca = "N/A"
+            if self.cambios.modelo is None:
+                self.cambios.modelo = "N/A"
 
             self.old_image = evento.old_image
             if self.old_image:
@@ -105,6 +109,10 @@ class ArticuloHandler(ItemHandler):
                     self.old_image.get('meli_tipo_publicacion', 'free').upper()
                 ].value
             self.old_image = MArticulo.parse_obj(self.old_image)
+            if self.old_image.marca is None:
+                self.old_image.marca = "N/A"
+            if self.old_image.modelo is None:
+                self.old_image.modelo = "N/A"
 
             self.session = MeliConexion(
                 self.old_image.codigoCompania or self.cambios.codigoCompania,
@@ -144,12 +152,12 @@ class ArticuloHandler(ItemHandler):
             img_id = r.json()['id']
             return img_id
         except ValueError as err:
-            logger.exception(err)
+            logger.warning(err)
             logger.warning(f"El tipo de imagen de '{file}' no tiene soporte en"
                            " MeLi y se saltará su carga.")
             return None
         except Exception as err:
-            logger.exception(err)
+            logger.warning(err)
             logger.warning(f"No se pudo asociar '{file}' al artículo.")
             try:
                 return img_id
@@ -172,11 +180,15 @@ class ArticuloHandler(ItemHandler):
         return atributos or None
 
     def _crear(self):
+
+        qty = (self.cambios.stock_act - self.cambios.stock_com)
+        if qty <= 0:
+            qty = 1
+
         articulo_input = MArticuloInput(
             **self.cambios.dict(by_alias=True,
                                 exclude_none=True),
-            available_quantity=(self.cambios.stock_act
-                                - self.cambios.stock_com),
+            available_quantity=qty,
             sale_terms=None,
             pictures=[
                 {'id': imgID}
@@ -266,6 +278,8 @@ class ArticuloHandler(ItemHandler):
                      - (self.cambios.stock_com or self.old_image.stock_com))
         stock_old = (self.old_image.stock_act - self.old_image.stock_com)
         if stock_new != stock_old:
+            if stock_new < 0:
+                stock_new = 1
             return stock_new
         else:
             return None

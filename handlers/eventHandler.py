@@ -130,10 +130,13 @@ class EventHandler:
         """
         try:
             r = self.handler(self).ejecutar()
-            return {"status": "OK", "respuesta": r}
-        except Exception:
-            logger.exception("Ocurrió un error ejecutando el evento.")
-            raise
+            return {"statusCode": 200, "status": "OK", "body": r}
+        except Exception as err:
+            logger.info("Ocurrió un error ejecutando el evento.")
+            return {
+                "statusCode": 400, "status": "ERROR",
+                "body": "Ocurrión un error"
+            }
 
 
 def procesar_todo(service_name: str, evento,
@@ -157,16 +160,14 @@ def procesar_todo(service_name: str, evento,
                            "ignorará el evento.")
             continue
         except Exception as err:
-            msg = (f"Ocurrió un error manejado el evento:\n{evento}."
-                   f"Se levantó la excepción '{err}'.")
-            logger.exception(msg)
+            logger.info(f"Ocurrió un error manejado el evento:\n{evento}."
+                        f"Se levantó la excepción '{err}'.")
             if n == 0:
                 sqs_queue.send_message(
                     MessageBody=json.dumps(evento),
                     MessageGroupId="ERROR_QUEUE",
                     MessageDeduplicationId=record.contenido.get("eventID")
                 )
-                raise Exception(msg) from err
             continue
         else:
             record.borrar_de_cola()
