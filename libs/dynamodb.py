@@ -7,8 +7,8 @@ logger = Logger(child=True)
 
 
 def obtener_tabla():
-    if getenv('ENV') == 'local':
-        session = boto3.Session(profile_name=getenv('AWS_PROFILE'))
+    if getenv("AWS_EXECUTION_ENV") is None:
+        session = boto3.Session(profile_name=getenv("AWS_PROFILE_NAME"))
     else:
         session = boto3
     return (
@@ -47,6 +47,7 @@ def obtener_meli_access_token(codigo_compania: str,
 def guardar_meli_access_token(codigo_compania: str,
                               codigo_tienda: str,
                               token: dict):
+    logger.debug(f"Guardando access token en DynamoDB: {token}")
     key = {
         "PK": f"{codigo_compania.upper()}#TIENDAS",
         "SK": f"T#{codigo_tienda.upper()}"

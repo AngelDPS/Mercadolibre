@@ -4,6 +4,7 @@ from libs.dynamodb import (
     obtener_meli_client_credentials,
     guardar_meli_error
 )
+from libs.exceptions import MeliRequestError, MeliValidationError
 from requests_oauthlib import OAuth2Session
 from requests.exceptions import HTTPError
 from decimal import Decimal
@@ -77,21 +78,34 @@ class MeliConexion(OAuth2Session):
         meli_api = 'https://api.mercadolibre.com/'
         url = (meli_api + meli_resource
                if meli_api not in meli_resource else meli_resource)
-        response = super().request(method,
-                                   url,
-                                   data,
-                                   headers,
-                                   withhold_token,
-                                   **kwargs)
+        try:
+            response = super().request(method,
+                                       url,
+                                       data,
+                                       headers,
+                                       withhold_token,
+                                       **kwargs)
+        except Exception as err:
+            logger.exception("Ocurrión un error al realizar la petición")
+            raise MeliRequestError(600, err)
         logger.info(f"{method} realizado a '{response.url}'")
         logger.debug(f'Retornó un status {response.status_code}'
                      f'\t{response.reason}\nContenido:\n{response.text}'
                      f'\nHeaders:\n{response.headers}')
-        if 400 <= response.status_code < 500:
-            error_msg = [cause.get("message")
-                         for cause in response.json().get("cause", {})]
-            logger.error(error_msg)
-            if PK and SK:
-                guardar_meli_error(PK, SK, error_msg)
-            raise HTTPError(error_msg)
+        try:
+            response.raise_for_status()
+        except HTTPError as err:
+            if response.status_code > 400:
+                logger.error(
+                    "Ocurrió un error con el servidor de MercadoLibre")
+                raise MeliRequestError(response.status_code, err)
+            elif response.status_code == 400:
+                if response.json().get("error") == "validation_error":
+                    error_msg = [cause.get("message")
+                                 for cause in response.json().get("cause", {})
+                                 if cause.get("type") == "error"]
+                    logger.error(error_msg)
+                    if PK and SK:
+                        guardar_meli_error(PK, SK, error_msg)
+                    raise MeliValidationError(error_msg)
         return response

@@ -7,6 +7,7 @@ from models.articulo import (
 from models.evento import MArticuloMeli as MArticulo
 from libs.conexion import MeliConexion
 from libs.util import get_parameter, ItemHandler
+from libs.exceptions import MeliRequestError, MeliValidationError
 from re import search
 import requests
 import boto3
@@ -93,6 +94,10 @@ class ArticuloHandler(ItemHandler):
                     self.cambios['meli_tipo_publicacion'].upper()
                 ].value
             self.cambios = MArticulo.parse_obj(self.cambios)
+            if self.cambios.marca is None:
+                self.cambios.marca = "N/A"
+            if self.cambios.modelo is None:
+                self.cambios.modelo = "N/A"
 
             self.old_image = evento.old_image
             if self.old_image:
@@ -105,6 +110,10 @@ class ArticuloHandler(ItemHandler):
                     self.old_image.get('meli_tipo_publicacion', 'free').upper()
                 ].value
             self.old_image = MArticulo.parse_obj(self.old_image)
+            if self.old_image.marca is None:
+                self.old_image.marca = "N/A"
+            if self.old_image.modelo is None:
+                self.old_image.modelo = "N/A"
 
             self.session = MeliConexion(
                 self.old_image.codigoCompania or self.cambios.codigoCompania,
@@ -144,12 +153,12 @@ class ArticuloHandler(ItemHandler):
             img_id = r.json()['id']
             return img_id
         except ValueError as err:
-            logger.exception(err)
+            logger.warning(err)
             logger.warning(f"El tipo de imagen de '{file}' no tiene soporte en"
                            " MeLi y se saltará su carga.")
             return None
         except Exception as err:
-            logger.exception(err)
+            logger.warning(err)
             logger.warning(f"No se pudo asociar '{file}' al artículo.")
             try:
                 return img_id
@@ -172,11 +181,15 @@ class ArticuloHandler(ItemHandler):
         return atributos or None
 
     def _crear(self):
+
+        qty = (self.cambios.stock_act - self.cambios.stock_com)
+        if qty <= 0:
+            qty = 1
+
         articulo_input = MArticuloInput(
             **self.cambios.dict(by_alias=True,
                                 exclude_none=True),
-            available_quantity=(self.cambios.stock_act
-                                - self.cambios.stock_com),
+            available_quantity=qty,
             sale_terms=None,
             pictures=[
                 {'id': imgID}
@@ -225,22 +238,26 @@ class ArticuloHandler(ItemHandler):
                 for img in self.cambios.imagen_url
             }}
             self.old_image.meli_id |= self._crear()
-            self.dynamo_guardar_meli_id()
             self._agregar_descripcion()
+            self.dynamo_guardar_meli_id()
             self._establecer_estatus()
-            return ["Producto creado!"]
-        except Exception:
-            logger.exception("No fue posible crear el producto.")
-            raise
+            return {
+                "statusCode": 201,
+                "body": "Articulo creado."
+            }
+        except (MeliRequestError, MeliValidationError) as err:
+            return {
+                "statusCode": err.status_code,
+                "body": err.error_message
+            }
 
     def _modificar_descripcion(self):
         if "meli_descripcion" in self.cambios.dict(exclude_unset=True):
-            r = self.session.put(
+            self.session.put(
                 f'items/{self.old_image.meli_id["articulo"]}/description',
                 json={'plain_text': self.cambios.meli_descripcion
                       or "Sin descripción."}
             )
-            r.raise_for_status()
             return "Descripción modificada."
         else:
             return "Descripción no modificada."
@@ -266,6 +283,8 @@ class ArticuloHandler(ItemHandler):
                      - (self.cambios.stock_com or self.old_image.stock_com))
         stock_old = (self.old_image.stock_act - self.old_image.stock_com)
         if stock_new != stock_old:
+            if stock_new <= 0:
+                stock_new = 1
             return stock_new
         else:
             return None
@@ -279,13 +298,12 @@ class ArticuloHandler(ItemHandler):
         ).dict(exclude_none=True, exclude_unset=True)
         logger.debug(articulo_input)
         if articulo_input:
-            response = self.session.put(
+            self.session.put(
                 f'items/{self.old_image.meli_id["articulo"]}',
                 json=articulo_input,
                 PK=self.cambios.PK or self.old_image.PK,
                 SK=self.cambios.SK or self.old_image.SK
             )
-            response.raise_for_status()
             return "Producto Modificado"
         else:
             return "Producto no modificado."
@@ -297,10 +315,15 @@ class ArticuloHandler(ItemHandler):
             respuestas = []
             respuestas.append(self._modificar_descripcion())
             respuestas.append(self._modificar_articulo())
-            return respuestas
-        except Exception:
-            logger.exception("No fue posible modificar el producto.")
-            raise
+            return {
+                "statusCode": 201,
+                "body": str(*respuestas)
+            }
+        except (MeliRequestError, MeliValidationError) as err:
+            return {
+                "statusCode": err.status_code,
+                "body": err.error_message
+            }
 
     def ejecutar(self) -> list[str]:
         """Ejecuta la acción requerida por el evento procesado en la instancia.
@@ -315,6 +338,9 @@ class ArticuloHandler(ItemHandler):
         else:
             logger.info("El artículo no está habilitado para procesarse en "
                         "MercadoLibre.")
-            respuesta = ["Artículo inhabilitado."]
+            respuesta = {
+                "statusCode": 401,
+                "body": "Articulo inhabilitado"
+            }
 
         return respuesta

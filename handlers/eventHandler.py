@@ -128,12 +128,7 @@ class EventHandler:
             dict[str, str]: Diccionario con la información del estado de la
             acción y el resultado obtenido.
         """
-        try:
-            r = self.handler(self).ejecutar()
-            return {"status": "OK", "respuesta": r}
-        except Exception:
-            logger.exception("Ocurrió un error ejecutando el evento.")
-            raise
+        return self.handler(self).ejecutar()
 
 
 def procesar_todo(service_name: str, evento,
@@ -156,17 +151,13 @@ def procesar_todo(service_name: str, evento,
             logger.warning("La acción requerida no está implementada y se "
                            "ignorará el evento.")
             continue
-        except Exception as err:
-            msg = (f"Ocurrió un error manejado el evento:\n{evento}."
-                   f"Se levantó la excepción '{err}'.")
-            logger.exception(msg)
-            if n == 0:
+        if r[-1].get("statusCode") >= 400:
+            if n == 0 and r[-1].get("statusCode") != 400:
                 sqs_queue.send_message(
                     MessageBody=json.dumps(evento),
                     MessageGroupId="ERROR_QUEUE",
                     MessageDeduplicationId=record.contenido.get("eventID")
                 )
-                raise Exception(msg) from err
             continue
         else:
             record.borrar_de_cola()

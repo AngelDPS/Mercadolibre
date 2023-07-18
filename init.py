@@ -1,12 +1,14 @@
 from typing import Any
 from aws_lambda_powertools import Logger
-from handlers.eventHandler import procesar_todo
+from handlers.eventHandler import procesar_todo, obtener_cambios
 from handlers.articuloHandler import ArticuloHandler
+from libs.util import filtro_campos_completos
+from os import environ, getenv
 
 logger = Logger()
 
 
-@logger.inject_lambda_context(log_event=True)
+# @logger.inject_lambda_context(log_event=True)
 def lambda_handler(evento: list[dict],
                    context: Any) -> list[dict[str, str]]:
     """Manipulador de los eventos de entrada provenientes de
@@ -25,6 +27,41 @@ def lambda_handler(evento: list[dict],
         list[dict[str, str]]: Lista de diccionarios con los mensajes
         retornados por cada evento procesado.
     """
-    handler_mapping = {'articulos': ArticuloHandler}
-    respuestas = procesar_todo('meli', evento, handler_mapping)
-    return respuestas
+    if getenv("AWS_EXECUTION_ENV") is None:
+        environ["NOMBRE_COMPANIA"] = "angel"
+        environ["AWS_REGION"] = "us-east-2"
+        environ["SQSERROR_URL"] = (
+            "https://sqs.us-east-2.amazonaws.com/099375320271/AngelQueue.fifo"
+        )
+        environ["AWS_PROFILE_NAME"] = "angel"
+
+    try:
+        filtro_campos_completos(evento)
+    except ValueError:
+        return {
+            "statusCode": 400,
+            "body": "No se encontraron campos completos en el registro"
+        }
+
+    logger.info(f"Evento: {evento}")
+    try:
+        cambios = obtener_cambios(
+            evento["Records"][0]["dynamodb"]["NewImage"],
+            evento["Records"][0]["dynamodb"].get("OldImage", {})
+        )
+    except IndexError:
+        cambios = obtener_cambios(evento[0]["dynamodb"]["NewImage"],
+                                  evento[0]["dynamodb"].get("OldImage", {}))
+    cambios.pop("meli_id", None)
+    cambios.pop("meli_error", None)
+    logger.info(f"Cambios: {cambios}")
+    if not cambios:
+        logger.info("No se encontraron cambios en el registro")
+        return {
+            "statusCode": 201,
+            "body": "No se encontraron cambios en el registro"
+        }
+    else:
+        handler_mapping = {'articulos': ArticuloHandler}
+        respuestas = procesar_todo('meli', evento, handler_mapping)
+        return respuestas

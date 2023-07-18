@@ -23,8 +23,8 @@ def _receive_messages(service_name: str) -> list:
             Asegúrese que el parámetro esté configurado correctamente.
             """
         )
-    if getenv('ENV') == 'local':
-        session = boto3.Session(profile_name='angel')
+    if getenv("AWS_EXECUTION_ENV") is None:
+        session = boto3.Session(profile_name=getenv("AWS_PROFILE_NAME"))
     else:
         session = boto3
     sqs_queue = (

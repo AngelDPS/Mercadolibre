@@ -21,9 +21,9 @@ def get_parameter(key: str) -> Any:
     Returns:
         Any: Valor obtenido del json almacenado en el parámetro.
     """
-    if getenv('ENV') == 'local':
+    if getenv("AWS_EXECUTION_ENV") is None:
         ssm_provider = SSMProvider(
-            boto3_session=Session(profile_name=getenv('AWS_PROFILE'))
+            boto3_session=Session(profile_name=getenv('AWS_PROFILE_NAME'))
         )
     else:
         ssm_provider = SSMProvider()
@@ -106,9 +106,40 @@ class ItemHandler(ABC):
             else:
                 logger.info("Los cambios encontrados no ameritan "
                             f"actualizaciones en {web_store}.")
-                respuesta = ["No se realizaron acciones."]
+                respuesta = {
+                    "statusCode": 200,
+                    "body": "No se realizaron cambios"
+                }
         except Exception:
-            logger.exception("Ocurrió un problema ejecutando la acción "
-                             "sobre el producto.")
+            logger.info("Ocurrió un problema ejecutando la acción "
+                        "sobre el producto.")
             raise
         return respuesta
+
+
+def filtro_campos_completos(evento):
+    filtro_campos = [
+        "prec_vta1", "prec_vta2", "prec_vta3", "PK", "SK", "habilitado",
+        "art_des", "codigoCompania", "codigoTienda", "co_art", "co_lin",
+        "stock_act", "stock_com", "imagen_url"
+    ]
+
+    try:
+        ev = evento["Records"][0]
+    except IndexError:
+        ev = evento[0]
+
+    if ev.get("eventName") == "INSERT":
+        for key in filtro_campos:
+            if key not in ev["dynamodb"]["NewImage"]:
+                logger.error("El evento no contiene el campo " + key)
+                raise ValueError("El evento no contiene el campo " + key)
+    elif ev.get("eventName") == "MODIFY":
+        for key in filtro_campos:
+            if (key not in ev["dynamodb"]["NewImage"]
+                    or key not in ev["dynamodb"]["OldImage"]):
+                logger.error("El evento no contiene el campo " + key)
+                raise ValueError("El evento no contiene el campo " + key)
+    else:
+        logger.error("El evento no es válido", evento)
+        raise ValueError("El evento no es válido")
