@@ -1,15 +1,32 @@
 Desarrollo para la integración de Mercadolibre con sistemas de bases de datos.
 
-## Variables de entorno
+## Datos para guardar en DynamoDB por tienda
+
+Al registro de tienda para MercadoLibre en DynamoDB se le debe agregar la siguiente data (en un mapa) manualmente, después de obtenerla de MercadoLibre via web:
+
+    "meli": {
+    "client": {
+    "client_id": [ID DE LA ADMIN APP DE MELI],
+    "client_secret": [SECRET DE LA ADMING APP DE MELI]
+    },
+    "refresh_token": {
+    "access_token": [ACCESS TOKEN OBTENIDO PARA AUTENTICACION POR OAUTH2],
+    "expires_at": [INICIALMENTE VACIO, SE POBLARÁ DESPUÉS DE LA PRIMERA CORRIDA],
+    "expires_in": 21600, # SE DEBE PONER MANUALMENTE EN UN VALOR NEGATIVO
+    "refresh_token": [REFRESH TOKEN OBTENIDO PARA AUTENTICACION POR OAUTH2],
+    "scope": [
+        "offline_access",
+        "read",
+        "write"
+    ],
+    "token_type": "Bearer",
+    "user_id": [ID DEL USUARIO ADMINISTRADOR SUSCRITO A LA APP ADMIN]
+    }
+    }
+
+## Variables de parameter
 
 * `MELI_PRECIO`: Establece que campo de precio a usar de la base de datos, con formato `prec_vta[num]`
-* `MELI_TIPO_PUB`: Establece el tipo de publicación, con tres opciones:
-    + "free"
-    + "bronze"
-    + "gold_special"
-    Más información sobre los tipos de publicación en <https://www.mercadolibre.com.ve/ayuda/Precios-de-vender-un-producto_870>.
-* `DYNAMODB_TABLE`: El nombre de la tabla de DynamoDB en la que se guardan los datos.
-* `BUCKET_NAME`: Nombre del bucket de S3 en el que se guardan las imágenes.
 * `SQSURL`: Url con la cola de SQS para eventos no-procesados.
 
 ## Obtener el `ACCESS_TOKEN`
