@@ -73,7 +73,7 @@ class RecordEnCola:
     def borrar_de_cola(self, only_last: bool = False):
         if self.mensajes:
             if only_last:
-                self.mensajes.pop.delete()
+                self.mensajes.pop().delete()
             else:
                 [mensaje.delete() for mensaje in self.mensajes]
 
