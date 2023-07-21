@@ -93,11 +93,9 @@ class ArticuloHandler(ItemHandler):
                 self.cambios['meli_tipo_publicacion'] = TipoPublicacion[
                     self.cambios['meli_tipo_publicacion'].upper()
                 ].value
-            self.cambios = MArticulo.parse_obj(self.cambios)
-            if self.cambios.marca is None:
-                self.cambios.marca = "N/A"
-            if self.cambios.modelo is None:
-                self.cambios.modelo = "N/A"
+            self.cambios = MArticulo.parse_obj(
+                {k: v for k, v in self.cambios.items() if v is not None}
+            )
 
             self.old_image = evento.old_image
             if self.old_image:
@@ -109,11 +107,9 @@ class ArticuloHandler(ItemHandler):
                 self.old_image['meli_tipo_publicacion'] = TipoPublicacion[
                     self.old_image.get('meli_tipo_publicacion', 'free').upper()
                 ].value
-            self.old_image = MArticulo.parse_obj(self.old_image)
-            if self.old_image.marca is None:
-                self.old_image.marca = "N/A"
-            if self.old_image.modelo is None:
-                self.old_image.modelo = "N/A"
+            self.old_image = MArticulo.parse_obj(
+                {k: v for k, v in self.old_image.items() if v is not None}
+            )
 
             self.session = MeliConexion(
                 self.old_image.codigoCompania or self.cambios.codigoCompania,
@@ -182,7 +178,10 @@ class ArticuloHandler(ItemHandler):
 
     def _crear(self):
 
-        qty = (self.cambios.stock_act - self.cambios.stock_com)
+        qty = 1 + int(
+            (self.cambios.stock_act - self.cambios.stock_com)
+            // (100 / self.cambios.meli_stock_porcentaje)
+        )
         if qty <= 0:
             qty = 1
 
@@ -279,9 +278,16 @@ class ArticuloHandler(ItemHandler):
             return None
 
     def _cambio_cantidad(self):
-        stock_new = ((self.cambios.stock_act or self.old_image.stock_act)
-                     - (self.cambios.stock_com or self.old_image.stock_com))
-        stock_old = (self.old_image.stock_act - self.old_image.stock_com)
+        stock_new = 1 + int(
+            ((self.cambios.stock_act or self.old_image.stock_act)
+             - (self.cambios.stock_com or self.old_image.stock_com))
+            // (100 / (self.cambios.meli_stock_porcentaje
+                       or self.old_image.meli_stock_porcentaje))
+        )
+        stock_old = 1 + int(
+            (self.old_image.stock_act - self.old_image.stock_com)
+            // (100 / self.old_image.meli_stock_porcentaje)
+        )
         if stock_new != stock_old:
             if stock_new <= 0:
                 stock_new = 1
