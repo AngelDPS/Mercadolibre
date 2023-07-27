@@ -1,3 +1,5 @@
+from os import getenv
+import os
 from libs.dynamodb import guardar_articulo_meli_id
 from models.articulo import (
     MArticuloInput,
@@ -18,10 +20,17 @@ logger = Logger(child=True)
 
 
 def get_url(fname: str) -> str:
-    s3_client = boto3.client(
-        's3', region_name='us-east-2',
-        config=boto3.session.Config(signature_version='s3v4')
-    )
+    if getenv("AWS_EXECUTION_ENV") is not None:
+        s3_client = boto3.client(
+            's3', region_name='us-east-2',
+            config=boto3.session.Config(signature_version='s3v4')
+        )
+    else:
+        session = boto3.Session(profile_name=os.environ["AWS_PROFILE_NAME"])
+        s3_client = session.client(
+            's3', region_name='us-east-2',
+            config=boto3.session.Config(signature_version='s3v4')
+        )
     return s3_client.generate_presigned_url(
         'get_object',
         Params={'Bucket': get_parameter("bucketname"),

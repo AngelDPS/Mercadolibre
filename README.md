@@ -6,21 +6,21 @@ Al registro de tienda para MercadoLibre en DynamoDB se le debe agregar la siguie
 
     "meli": {
     "client": {
-    "client_id": [ID DE LA ADMIN APP DE MELI],
-    "client_secret": [SECRET DE LA ADMING APP DE MELI]
+    "client_id": "2416149642134557",
+    "client_secret": "p21OoANgIO25F6OZtGFZZ5WQQqc3SDWE"
     },
     "refresh_token": {
-    "access_token": [ACCESS TOKEN OBTENIDO PARA AUTENTICACION POR OAUTH2],
-    "expires_at": [INICIALMENTE VACIO, SE POBLARÁ DESPUÉS DE LA PRIMERA CORRIDA],
-    "expires_in": 21600, # SE DEBE PONER MANUALMENTE EN UN VALOR NEGATIVO
-    "refresh_token": [REFRESH TOKEN OBTENIDO PARA AUTENTICACION POR OAUTH2],
+    "access_token": "APP_USR-2416149642134557-072614-175533b370f242291f8058b2513a1c8d-95798694",
+    "expires_at": "",
+    "expires_in": -10, # SE DEBE PONER MANUALMENTE EN UN VALOR NEGATIVO
+    "refresh_token": "TG-64c16b2997a65600015c3014-95798694",
     "scope": [
         "offline_access",
         "read",
         "write"
     ],
     "token_type": "Bearer",
-    "user_id": [ID DEL USUARIO ADMINISTRADOR SUSCRITO A LA APP ADMIN]
+    "user_id": "95798694"
     }
     }
 
@@ -50,4 +50,14 @@ Para crear un usuario de pruebas se manda el siguiente request al recurso `users
         "site_id":"MLA"
     }'
     'https://api.mercadolibre.com/users/test_user'
+
+
+Verificar:
+1) Al publicarse el producto en meli, eliminar los errores
+
+Validaciones:
+1) Stock = 1
+2) Precio > 2
+
+
 

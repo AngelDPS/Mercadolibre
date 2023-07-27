@@ -10,3 +10,5 @@ tests*
 *aws-sam
 *.json
 cargar_articulos_dynamo.py
+.python-version
+env310/
