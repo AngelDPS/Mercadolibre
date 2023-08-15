@@ -1,8 +1,8 @@
 from boto3.dynamodb.types import TypeDeserializer
 from libs.util import ItemHandler
 from handlers.sqsHandler import obtener_records_en_cola
+from json import dumps
 from aws_lambda_powertools import Logger
-import json
 
 logger = Logger(service="event_handler")
 
@@ -45,12 +45,14 @@ def obtener_cambios(new_dict: dict, old_dict: dict) -> dict:
     """
     cambios = {}
     for k, v in old_dict.items():
-        if isinstance(v, dict):
-            cambios[k] = EventHandler.obtener_cambios(new_dict.get(k, {}),
-                                                      v)
-        elif v != new_dict.get(k) and k != "updated_at":
+        # if isinstance(v, dict):
+        # cambios[k] = EventHandler.obtener_cambios(new_dict.get(k,{}),
+        #                                           v)
+        if v != new_dict.get(k) and k != "updated_at":
             cambios[k] = new_dict.get(k)
     cambios |= {k: v for k, v in new_dict.items() if k not in old_dict}
+    # cambios = {k: v for k, v in cambios.items()
+    #            if (v or (v is None or v == 0))}
     return cambios
 
 
@@ -131,12 +133,13 @@ class EventHandler:
         return self.handler(self).ejecutar()
 
 
-def procesar_todo(service_name: str, evento,
+def procesar_todo(evento: list[dict],
                   handler_mapping: dict[str, ItemHandler]):
-    records_en_cola, sqs_queue = obtener_records_en_cola(
-        service_name,
-        evento_nuevo=evento
-    )
+    try:
+        record = evento["Records"][0]
+    except KeyError:
+        record = evento[0]
+    records_en_cola, sqs_queue = obtener_records_en_cola(record)
     r = []
 
     logger.info("Records para procesar: "
@@ -151,10 +154,18 @@ def procesar_todo(service_name: str, evento,
             logger.warning("La acción requerida no está implementada y se "
                            "ignorará el evento.")
             continue
-        if r[-1].get("statusCode") >= 400:
+        except Exception as err:
+            msg = (f"Ocurrió un error manejado el evento:\n{record.contenido}."
+                   f"Se levantó la excepción '{err}'.")
+            logger.exception(msg)
+            if n == 0:
+                raise Exception(msg) from err
+            continue
+
+        if isinstance(r[-1], dict) and r[-1].get("statusCode") >= 400:
             if n == 0 and r[-1].get("statusCode") != 400:
                 sqs_queue.send_message(
-                    MessageBody=json.dumps(evento),
+                    MessageBody=dumps(evento),
                     MessageGroupId="ERROR_QUEUE",
                     MessageDeduplicationId=record.contenido.get("eventID")
                 )
