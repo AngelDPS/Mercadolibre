@@ -39,25 +39,31 @@ def obtener_codigo(record: dict) -> str | None:
     que generó el record.
 
     Args:
-        record (list[dict]): Evento recibido por Lambda para ser procesado
+        record (dict): Evento recibido por Lambda para ser procesado
         debido a cambios en DynamoDB.
 
     Returns:
         str | None: Código  único del ítem de DynamoDB para la entidad.
     """
-    match record["dynamodb"]["NewImage"]["entity"]["S"]:
+    try:
+        new_image = record["dynamodb"]["NewImage"]
+    except KeyError:
+        new_image = record["Records"][0]["dynamodb"]["NewImage"]
+    except IndexError:
+        new_image = record[0]["dynamodb"]["NewImage"]
+    match new_image["entity"]["S"]:
         case "articulos":
-            return record["dynamodb"]["NewImage"]["co_art"]["S"]
+            return new_image["co_art"]["S"]
         case "lineas":
-            return record["dynamodb"]["NewImage"]["co_lin"]["S"]
+            return new_image["co_lin"]["S"]
         case "tiendas":
-            return record["dynamodb"]["NewImage"]["codigoTienda"]["S"]
+            return new_image["codigoTienda"]["S"]
         case _:
             return None
 
 
 class ItemHandler(ABC):
-    item: str
+    ITEM_TYPE: str
     old_image: dict | BaseModel
     cambios: dict | BaseModel
 
@@ -81,24 +87,24 @@ class ItemHandler(ABC):
         try:
             if self.cambios.dict(exclude_unset=True):
                 logger.info("Se aplicarán los cambios al "
-                            f"{self.item} en {web_store}.")
+                            f"{self.ITEM_TYPE} en {web_store}.")
                 if not self.old_image.dict(exclude_unset=True):
                     logger.info(
-                        "Al no haber OldImage en el evento, se identica como "
-                        "un INSERT y se procede a crear el "
-                        f"{self.item} en {web_store}."
+                        "Al no haber OldImage en el evento, se identica "
+                        "como un INSERT y se procede a crear el "
+                        f"{self.ITEM_TYPE} en {web_store}."
                     )
                     respuesta = self.crear()
                 elif not id:
-                    logger.info(
-                        "En el evento, proveniente de la base de datos, no se "
-                        f"encontró el ID de {self.item} para {web_store}. "
-                        f"Se creará un {self.item} nuevo con la data "
-                        "actualizada."
-                    )
                     self.cambios = self.cambios.parse_obj(
                         self.old_image.dict()
                         | self.cambios.dict(exclude_unset=True)
+                    )
+                    logger.info(
+                        "En el evento, proveniente de la base de "
+                        "datos, no se encontró el ID de "
+                        f"{self.ITEM_TYPE} para {web_store}. Se creará un "
+                        f"{self.ITEM_TYPE} nuevo con la data actualizada."
                     )
                     respuesta = self.crear()
                 else:

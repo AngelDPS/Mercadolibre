@@ -1,26 +1,26 @@
 import json
 import boto3
 from aws_lambda_powertools import Logger
-from libs.util import obtener_codigo, get_parameter
+from libs.util import obtener_codigo
 from os import getenv
+from typing import Any
 
 logger = Logger(service="sqs_handler")
 
 
-def _receive_messages(service_name: str) -> list:
+def _receive_messages() -> list:
     """Consulta los mensajes en la cola de SQS que resultaron de un error
     al manejar el evento.
 
     Returns:
         list[dict]: Lista con todos los mensajes en cola en SQS.
     """
-    param_key = f"{service_name.upper()}_SQSURL"
-    sqs_url = get_parameter(param_key)
+    sqs_url = getenv("SQSERROR_URL")
     if sqs_url is None:
         raise ValueError(
-            f"""No se encontró el valor para {param_key} en el parámetro
-            consultado.
-            Asegúrese que el parámetro esté configurado correctamente.
+            """No se encontró el valor de "SQSERROR_URL" en las variables
+            de ambiente.
+            Asegúrese que el ambiente esté configurado correctamente.
             """
         )
     if getenv("AWS_EXECUTION_ENV") is None:
@@ -45,7 +45,10 @@ class RecordEnCola:
                  dynamo_data: dict = None):
         if mensaje is not None:
             self.mensajes = [mensaje]
-            self.contenido = json.loads(mensaje.body)
+            try:
+                self.contenido = json.loads(mensaje.body)[0]
+            except KeyError:
+                self.contenido = json.loads(mensaje.body)["Records"][0]
         else:
             self.mensajes = []
         if dynamo_data is not None:
@@ -55,10 +58,6 @@ class RecordEnCola:
                 "Para crear un evento en cola hace falta un mensaje de SQS o "
                 "un data stream de Dynamo."
             )
-        try:
-            self.contenido = self.contenido["Records"][0]
-        except IndexError:
-            self.contenido = self.contenido[0]
         self.codigo = obtener_codigo(self.contenido)
 
     def __eq__(self, other):
@@ -89,25 +88,20 @@ class RecordEnCola:
             self.mensajes.extend(other.mensajes)
 
 
-def obtener_records_en_cola(
-    service_name: str,
-    evento_nuevo: dict
-) -> dict[str, RecordEnCola]:
-    """Usando el `service_name`, consulta el parameter store por el campo
-    {SERVICE_NAME}_SQSURL, con este se consulta la cola de mensajes con records
-    no-procesados, y se analizan por casos de repeticiones entre si mismos y
-    `evento_nuevo`.
+def obtener_records_en_cola(record_nuevo: dict
+                            ) -> tuple[list[RecordEnCola], Any]:
+    """.
 
     Args:
         service_name (str): Nombre del servicio para formar el campo
         {SERVICE_NAME}_URL del parámetro en el parameter store.
-        evento_nuevo (dict): Evento para agregar al final del diccionario,
+        record_nuevo (dict): Evento para agregar al final del diccionario,
         analizando por repetición.
 
     Returns:
-        dict[str, RecordEnCola]:
+        tuple[list[RecordEnCola], Any]:
     """
-    messages, sqs_queue = _receive_messages(service_name)
+    messages, sqs_queue = _receive_messages()
     cola = [RecordEnCola(mensaje=msj) for msj in messages]
     for idx, evento in enumerate(cola):
         logger.debug(f"Evento {idx+1} = {evento}")
@@ -128,7 +122,7 @@ def obtener_records_en_cola(
             cola[first_idx].unir_records(evento)
             del cola[idx]
 
-    record_nuevo = RecordEnCola(dynamo_data=evento_nuevo)
+    record_nuevo = RecordEnCola(dynamo_data=record_nuevo)
     if record_nuevo in cola:
         logger.warning(
             f'Se encontraron eventos en cola para para "{record_nuevo.codigo}"'
