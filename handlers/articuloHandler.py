@@ -55,7 +55,7 @@ class TipoPublicacion(Enum):
 
 
 class ArticuloHandler(ItemHandler):
-    item = "articulo"
+    ITEM_TYPE = "articulo"
 
     def __init__(self, evento):
         """Constructor de la clase
