@@ -111,6 +111,10 @@ class ArticuloHandler(ItemHandler):
             self.old_image = evento.old_image
             if self.old_image:
                 self.old_image['precio'] = self.old_image[campo_precio]
+                # FIXME: Es posible que OLD_IMAGE no tenga el campo meli_habilitado, en este caso falla!
+                # Por ejemplo cuando se va activa el articulo para mercadolibre
+                # FIXME: ANGEL1
+                print("OLD IMAGE:", self.old_image)
                 self.old_image['habilitado'] = Habilitado(
                     self.old_image.get('habilitado') and
                     self.old_image.get('meli_habilitado')
@@ -322,12 +326,36 @@ class ArticuloHandler(ItemHandler):
         logger.debug(f"{self.old_image = }")
         try:
             respuestas = []
+            print(respuestas)
             respuestas.append(self._modificar_descripcion())
+            print(respuestas)
             respuestas.append(self._modificar_articulo())
+            print(respuestas)
             return {
                 "statusCode": 201,
-                "body": str(*respuestas)
+                # AQUI El CAMBIO
+                # "body": str(*respuestas)
+                "body": ",".join(respuestas)
             }
+        
+
+        #FIXME: [ERROR] TypeError: decoding str is not supported
+            # Traceback (most recent call last):
+            #   File "/var/task/aws_lambda_powertools/logging/logger.py", line 438, in decorate
+            #     return lambda_handler(event, context, *args, **kwargs)
+            #   File "/var/task/init.py", line 70, in lambda_handler
+            #     respuestas = procesar_todo('meli', evento, handler_mapping)
+            #   File "/var/task/handlers/eventHandler.py", line 148, in procesar_todo
+            #     handler_mapping).ejecutar())
+            #   File "/var/task/handlers/eventHandler.py", line 131, in ejecutar
+            #     return self.handler(self).ejecutar()
+            #   File "/var/task/handlers/articuloHandler.py", line 347, in ejecutar
+            #     respuesta = super().ejecutar("MercadoLibre",
+            #   File "/var/task/libs/util.py", line 105, in ejecutar
+            #     respuesta = self.modificar()
+            #   File "/var/task/handlers/articuloHandler.py", line 331, in modificar
+            #     "body": str(*respuestas)
+        
         except (MeliRequestError, MeliValidationError) as err:
             return {
                 "statusCode": err.status_code,

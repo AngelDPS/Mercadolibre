@@ -151,6 +151,8 @@ def procesar_todo(service_name: str, evento,
             logger.warning("La acción requerida no está implementada y se "
                            "ignorará el evento.")
             continue
+        # FIXME: Es posible que e lugar de mandar el evento a ErrorQueue generemos un Exception (Va a ser capturada por StepFunctions)
+        # FIXME: en caso que se haga esta modificación eliminar la politica de escritura a Error Queue en el template.
         if r[-1].get("statusCode") >= 400:
             if n == 0 and r[-1].get("statusCode") != 400:
                 sqs_queue.send_message(

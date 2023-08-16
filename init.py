@@ -8,7 +8,7 @@ from os import environ, getenv
 logger = Logger()
 
 
-# @logger.inject_lambda_context(log_event=True)
+@logger.inject_lambda_context(log_event=True)
 def lambda_handler(evento: list[dict],
                    context: Any) -> list[dict[str, str]]:
     """Manipulador de los eventos de entrada provenientes de
@@ -27,6 +27,8 @@ def lambda_handler(evento: list[dict],
         list[dict[str, str]]: Lista de diccionarios con los mensajes
         retornados por cada evento procesado.
     """
+    print("EL EVENTO")
+    print(evento)
     if getenv("AWS_EXECUTION_ENV") is None:
         environ["NOMBRE_COMPANIA"] = "generico2022"
         environ["AWS_REGION"] = "us-east-2"
@@ -37,7 +39,9 @@ def lambda_handler(evento: list[dict],
 
     try:
         filtro_campos_completos(evento)
-    except ValueError:
+    except ValueError as e:
+        #FIXME: Cambio para que funcione con StepFunction
+        raise e
         return {
             "statusCode": 400,
             "body": "No se encontraron campos completos en el registro"

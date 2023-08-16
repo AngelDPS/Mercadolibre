@@ -1,4 +1,5 @@
 import json
+import os
 import boto3
 from aws_lambda_powertools import Logger
 from libs.util import obtener_codigo, get_parameter
@@ -14,15 +15,21 @@ def _receive_messages(service_name: str) -> list:
     Returns:
         list[dict]: Lista con todos los mensajes en cola en SQS.
     """
-    param_key = f"{service_name.upper()}_SQSURL"
-    sqs_url = get_parameter(param_key)
-    if sqs_url is None:
-        raise ValueError(
-            f"""No se encontró el valor para {param_key} en el parámetro
-            consultado.
-            Asegúrese que el parámetro esté configurado correctamente.
-            """
-        )
+
+    #FIXME: Obtenemos el Error Queue de la variable de entorno, en lugar del Parameter Store
+    sqs_url = os.environ["SQSERROR_URL"]
+    
+    # param_key = f"{service_name.upper()}_SQSURL"
+    # sqs_url = get_parameter(param_key)
+    # if sqs_url is None:
+    #     raise ValueError(
+    #         f"""No se encontró el valor para {param_key} en el parámetro
+    #         consultado.
+    #         Asegúrese que el parámetro esté configurado correctamente.
+    #         """
+    #     )
+
+    
     if getenv("AWS_EXECUTION_ENV") is None:
         session = boto3.Session(profile_name=getenv("AWS_PROFILE_NAME"))
     else:
