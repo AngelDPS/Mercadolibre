@@ -10,3 +10,4 @@ tests*
 *aws-sam
 *.json
 cargar_articulos_dynamo.py
+ejecutar_evento.py
