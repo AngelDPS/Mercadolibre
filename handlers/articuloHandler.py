@@ -178,12 +178,10 @@ class ArticuloHandler(ItemHandler):
 
     def _crear(self):
 
-        qty = 1 + int(
-            (self.cambios.stock_act - self.cambios.stock_com)
-            // (100 / self.cambios.meli_stock_porcentaje)
-        )
-        if qty <= 0:
-            qty = 1
+        qty = int(sum(divmod(
+            self.cambios.stock_act - self.cambios.stock_com,
+            100 / self.cambios.meli_stock_porcentaje
+        )))
 
         articulo_input = MArticuloInput(
             **self.cambios.dict(by_alias=True,
@@ -191,13 +189,14 @@ class ArticuloHandler(ItemHandler):
             available_quantity=qty,
             sale_terms=None,
             pictures=[
-                {'id': imgID}
-                for imgID in self.old_image.meli_id['imagenes'].values()
+                {'id': img_id}
+                for img_id in self.old_image.meli_id['imagenes'].values()
             ],
             attributes=self._obtener_atributos(),
             shipping=Shipping()
         ).dict(exclude_none=True)
         logger.debug(articulo_input)
+
         response = self.session.post(
             'items',
             json=articulo_input,
