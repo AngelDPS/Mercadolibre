@@ -12,3 +12,4 @@ tests*
 cargar_articulos_dynamo.py
 .python-version
 env310/
+ejecutar_evento.py
