@@ -1,6 +1,7 @@
 import boto3
 from botocore.exceptions import ClientError
 from os import getenv
+import time
 from aws_lambda_powertools import Logger
 
 logger = Logger(child=True)
@@ -47,6 +48,7 @@ def obtener_meli_access_token(codigo_compania: str,
 def guardar_meli_access_token(codigo_compania: str,
                               codigo_tienda: str,
                               token: dict):
+    token["expires_at"] = time.time() + 18000
     logger.debug(f"Guardando access token en DynamoDB: {token}")
     key = {
         "PK": f"{codigo_compania.upper()}#TIENDAS",
