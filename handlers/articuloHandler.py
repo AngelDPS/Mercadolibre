@@ -8,6 +8,7 @@ from models.evento import MArticuloMeli as MArticulo
 from libs.conexion import MeliConexion
 from libs.util import get_parameter, ItemHandler
 from libs.exceptions import MeliRequestError, MeliValidationError
+from os import getenv
 from re import search
 import requests
 import boto3
@@ -18,7 +19,11 @@ logger = Logger(child=True)
 
 
 def get_url(fname: str) -> str:
-    s3_client = boto3.client(
+    if getenv("AWS_EXECUTION_ENV") is not None:
+        session = boto3
+    else:
+        session = boto3.Session(profile_name=getenv["AWS_PROFILE_NAME"])
+    s3_client = session.client(
         's3', region_name='us-east-2',
         config=boto3.session.Config(signature_version='s3v4')
     )
@@ -322,7 +327,7 @@ class ArticuloHandler(ItemHandler):
             respuestas.append(self._modificar_articulo())
             return {
                 "statusCode": 201,
-                "body": str(*respuestas)
+                "body": ",".join(respuestas)
             }
         except (MeliRequestError, MeliValidationError) as err:
             return {
