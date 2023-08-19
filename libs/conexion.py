@@ -1,8 +1,7 @@
 from libs.dynamodb import (
     obtener_meli_access_token,
     guardar_meli_access_token,
-    obtener_meli_client_credentials,
-    guardar_meli_error
+    obtener_meli_client_credentials
 )
 from libs.exceptions import MeliRequestError, MeliValidationError
 from requests_oauthlib import OAuth2Session
@@ -71,8 +70,6 @@ class MeliConexion(OAuth2Session):
         data: dict = None,
         headers: dict = None,
         withhold_token: bool = False,
-        PK: str = "",
-        SK: str = "",
         **kwargs
     ):
         meli_api = 'https://api.mercadolibre.com/'
@@ -95,17 +92,14 @@ class MeliConexion(OAuth2Session):
         try:
             response.raise_for_status()
         except HTTPError as err:
-            if response.status_code > 400:
-                logger.error(
-                    "Ocurrió un error con el servidor de MercadoLibre")
-                raise MeliRequestError(response.status_code, err)
-            elif response.status_code == 400:
-                if response.json().get("error") == "validation_error":
-                    error_msg = [cause.get("message")
-                                 for cause in response.json().get("cause", {})
-                                 if cause.get("type") == "error"]
-                    logger.error(error_msg)
-                    if PK and SK:
-                        guardar_meli_error(PK, SK, error_msg)
-                    raise MeliValidationError(error_msg)
+            if (response.status_code == 400
+                    and response.json().get("error") == "validation_error"):
+                error_msg = [cause.get("message")
+                             for cause in response.json().get("cause", {})
+                             if cause.get("type") == "error"]
+                logger.error(error_msg)
+                raise MeliValidationError(error_msg)
+            logger.error(
+                "Ocurrió un error con el servidor de MercadoLibre")
+            raise MeliRequestError(response.status_code, err)
         return response

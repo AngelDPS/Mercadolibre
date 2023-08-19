@@ -1,4 +1,4 @@
-from libs.dynamodb import guardar_articulo_meli_id
+from libs.dynamodb import guardar_articulo_meli_id, guardar_meli_error
 from models.articulo import (
     MArticuloInput,
     Attributes,
@@ -7,7 +7,7 @@ from models.articulo import (
 from models.evento import MArticuloMeli as MArticulo
 from libs.conexion import MeliConexion
 from libs.util import get_parameter, ItemHandler
-from libs.exceptions import MeliRequestError, MeliValidationError
+from libs.exceptions import MeliApiError, MeliValidationError
 from os import getenv
 from re import search
 import requests
@@ -204,9 +204,7 @@ class ArticuloHandler(ItemHandler):
 
         response = self.session.post(
             'items',
-            json=articulo_input,
-            PK=self.cambios.PK or self.old_image.PK,
-            SK=self.cambios.SK or self.old_image.SK
+            json=articulo_input
         )
         id_dict = {
             'articulo': response.json()['id']
@@ -244,11 +242,22 @@ class ArticuloHandler(ItemHandler):
             self._agregar_descripcion()
             self.dynamo_guardar_meli_id()
             self._establecer_estatus()
+            guardar_meli_error(
+                PK=self.cambios.PK or self.old_image.PK,
+                SK=self.cambios.SK or self.old_image.SK,
+                cause_msg=[]
+            )
             return {
                 "statusCode": 201,
                 "body": "Articulo creado."
             }
-        except (MeliRequestError, MeliValidationError) as err:
+        except MeliApiError as err:
+            if isinstance(err, MeliValidationError):
+                guardar_meli_error(
+                    PK=self.cambios.PK or self.old_image.PK,
+                    SK=self.cambios.SK or self.old_image.SK,
+                    cause_msg=err.error_message
+                )
             return {
                 "statusCode": err.status_code,
                 "body": err.error_message
@@ -281,7 +290,7 @@ class ArticuloHandler(ItemHandler):
         else:
             return None
 
-    def _cambio_cantidad(self):
+    def _cambio_cantidad(self):  # FIXME Actualizar el cálculo del stock
         stock_new = 1 + int(
             ((self.cambios.stock_act or self.old_image.stock_act)
              - (self.cambios.stock_com or self.old_image.stock_com))
@@ -310,9 +319,7 @@ class ArticuloHandler(ItemHandler):
         if articulo_input:
             self.session.put(
                 f'items/{self.old_image.meli_id["articulo"]}',
-                json=articulo_input,
-                PK=self.cambios.PK or self.old_image.PK,
-                SK=self.cambios.SK or self.old_image.SK
+                json=articulo_input
             )
             return "Producto Modificado"
         else:
@@ -325,11 +332,22 @@ class ArticuloHandler(ItemHandler):
             respuestas = []
             respuestas.append(self._modificar_descripcion())
             respuestas.append(self._modificar_articulo())
+            guardar_meli_error(
+                PK=self.cambios.PK or self.old_image.PK,
+                SK=self.cambios.SK or self.old_image.SK,
+                cause_msg=[]
+            )
             return {
                 "statusCode": 201,
                 "body": ",".join(respuestas)
             }
-        except (MeliRequestError, MeliValidationError) as err:
+        except MeliApiError as err:
+            if isinstance(err, MeliValidationError):
+                guardar_meli_error(
+                    PK=self.cambios.PK or self.old_image.PK,
+                    SK=self.cambios.SK or self.old_image.SK,
+                    cause_msg=err.error_message
+                )
             return {
                 "statusCode": err.status_code,
                 "body": err.error_message
