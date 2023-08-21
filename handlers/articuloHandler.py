@@ -168,31 +168,33 @@ class ArticuloHandler(ItemHandler):
                                "MercadoLibre.")
                 return None
 
-    def _obtener_atributos(self):
+    def _obtener_atributos(self, ignore_default: bool = False):
         attr_from_entry = {
             'GTIN': 'codigo_barra',
             'SELLER_SKU': 'referencia',
             'BRAND': 'marca',
             'MODEL': 'modelo'
         }
-        # FIXME Revisar que los atributos no se reseteen a default values
-        atributos = [(id, getattr(self.cambios, registro, None))
-                     for id, registro in attr_from_entry.items()]
-        atributos = [Attributes(id=id, value_name=value)
-                     for id, value in atributos if value is not None]
+        cambios_dict = self.cambios.dict(exclude_unset=ignore_default)
+        atributos = [
+            Attributes(id=id, value_name=cambios_dict.get(registro))
+            for id, registro in attr_from_entry.items()
+            if cambios_dict.get(registro) is not None
+        ]
         return atributos or None
 
-    def _crear(self):
-
-        qty = int(sum(divmod(
+    def _calcular_stock(self):
+        return int(sum(divmod(
             self.cambios.stock_act - self.cambios.stock_com,
             100 / self.cambios.meli_stock_porcentaje
         )))
 
+    def _crear(self):
+
         articulo_input = MArticuloInput(
             **self.cambios.dict(by_alias=True,
                                 exclude_none=True),
-            available_quantity=qty,
+            available_quantity=self._calcular_stock(),
             sale_terms=None,
             pictures=[
                 {'id': img_id}
@@ -320,7 +322,7 @@ class ArticuloHandler(ItemHandler):
             **self.cambios.dict(exclude_unset=True),
             available_quantity=self._cambio_cantidad(),
             pictures=self._obtener_imagenes(),
-            attributes=self._obtener_atributos()
+            attributes=self._obtener_atributos(ignore_default=True)
         ).dict(exclude_none=True, exclude_unset=True)
         logger.debug(articulo_input)
         if articulo_input:
