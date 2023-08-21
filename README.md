@@ -51,3 +51,11 @@ Para crear un usuario de pruebas se manda el siguiente request al recurso `users
     }'
     'https://api.mercadolibre.com/users/test_user'
 
+Actualizar el stock
+
+Para actualizar el stock de un ítem debes agregar un valor en el campo “available_quantity” teniendo en cuenta:
+
+    Si haces PUT del available_quantity = 0 cambiará el estado a “paused” con sub estado out_of_stock.
+    Si haces PUT del available_quantity mayor a 0 y el sub estado es out_of_stock cambiará el estado a activo sin sub estado out_of_stock.
+    Sólo puedes pausar un ítem enviando available_quantity = 0 cuando sea del tipo condition = new y no sea listing_type = free. 
+

@@ -175,6 +175,7 @@ class ArticuloHandler(ItemHandler):
             'BRAND': 'marca',
             'MODEL': 'modelo'
         }
+        # FIXME Revisar que los atributos no se reseteen a default values
         atributos = [(id, getattr(self.cambios, registro, None))
                      for id, registro in attr_from_entry.items()]
         atributos = [Attributes(id=id, value_name=value)
@@ -290,20 +291,26 @@ class ArticuloHandler(ItemHandler):
         else:
             return None
 
-    def _cambio_cantidad(self):  # FIXME Actualizar el cálculo del stock
-        stock_new = 1 + int(
-            ((self.cambios.stock_act or self.old_image.stock_act)
-             - (self.cambios.stock_com or self.old_image.stock_com))
-            // (100 / (self.cambios.meli_stock_porcentaje
-                       or self.old_image.meli_stock_porcentaje))
-        )
-        stock_old = 1 + int(
-            (self.old_image.stock_act - self.old_image.stock_com)
-            // (100 / self.old_image.meli_stock_porcentaje)
-        )
+    def _cambio_cantidad(self):
+
+        stock_act = (self.cambios.stock_act
+                     if self.cambios.stock_act is not None
+                     else self.old_image.stock_act)
+        stock_com = (self.cambios.stock_com
+                     if self.cambios.stock_com is not None
+                     else self.old_image.stock_com)
+
+        stock_new = int(sum(divmod(
+            stock_act - stock_com,
+            100 / (self.cambios.meli_stock_porcentaje
+                   or self.old_image.meli_stock_porcentaje)
+        )))
+        stock_old = int(sum(divmod(
+            self.old_image.stock_act - self.old_image.stock_com,
+            100 / self.old_image.meli_stock_porcentaje
+        )))
+
         if stock_new != stock_old:
-            if stock_new <= 0:
-                stock_new = 1
             return stock_new
         else:
             return None
