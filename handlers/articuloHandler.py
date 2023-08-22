@@ -22,7 +22,7 @@ def get_url(fname: str) -> str:
     if getenv("AWS_EXECUTION_ENV") is not None:
         session = boto3
     else:
-        session = boto3.Session(profile_name=getenv["AWS_PROFILE_NAME"])
+        session = boto3.Session(profile_name=getenv("AWS_PROFILE_NAME"))
     s3_client = session.client(
         's3', region_name='us-east-2',
         config=boto3.session.Config(signature_version='s3v4')
@@ -52,6 +52,8 @@ class TipoPublicacion(Enum):
 
 class ArticuloHandler(ItemHandler):
     ITEM_TYPE = "articulo"
+    procesar = False
+    force_update = False
 
     def __init__(self, evento):
         """Constructor de la clase
@@ -66,17 +68,12 @@ class ArticuloHandler(ItemHandler):
             encontrados en los campos entre la imagen nueva y vieja.
             Defaults to None.
         """
-        if not (evento.old_image.get('meli_habilitado') or
+        if (evento.old_image.get('meli_habilitado') or
                 evento.cambios.get('meli_habilitado')):
-            logger.info(
-                """El articulo no está habilitado para MercadoLibre y será
-                ignorado.
-                Para cambiar esto, establezca el registro meli.habilitado
-                con el valor '1'."""
-            )
-            self.procesar = False
-        else:
             self.procesar = True
+            if (evento.cambios.get('meli_habilitado') or
+                    evento.cambios.get('habilitado')):
+                self.force_update = True
 
             campo_precio = get_parameter('MELI_PRECIO')
 
@@ -168,6 +165,12 @@ class ArticuloHandler(ItemHandler):
                                "MercadoLibre.")
                 return None
 
+    def _cargar_imagenes(self):
+        return {'imagenes': {
+                img: self._cargar_imagen(img)
+                for img in self.cambios.imagen_url
+                }}
+
     def _obtener_atributos(self, ignore_default: bool = False):
         attr_from_entry = {
             'GTIN': 'codigo_barra',
@@ -190,7 +193,7 @@ class ArticuloHandler(ItemHandler):
         )))
 
     def _crear(self):
-
+        self.old_image.meli_id |= self._cargar_imagenes()
         articulo_input = MArticuloInput(
             **self.cambios.dict(by_alias=True,
                                 exclude_none=True),
@@ -237,10 +240,6 @@ class ArticuloHandler(ItemHandler):
         logger.info("Creando artículo para MercadoLibre.")
         logger.debug(self.cambios.dict())
         try:
-            self.old_image.meli_id |= {'imagenes': {
-                img: self._cargar_imagen(img)
-                for img in self.cambios.imagen_url
-            }}
             self.old_image.meli_id |= self._crear()
             self._agregar_descripcion()
             self.dynamo_guardar_meli_id()
@@ -285,6 +284,7 @@ class ArticuloHandler(ItemHandler):
             img: self._cargar_imagen(img)
             for img in urls_anexados
         }
+        self.dynamo_guardar_meli_id()
         if "imagen_url" in self.cambios.dict(exclude_unset=True):
             return [
                 {'id': self.old_image.meli_id['imagenes'][fname]}
@@ -319,7 +319,8 @@ class ArticuloHandler(ItemHandler):
 
     def _modificar_articulo(self):
         articulo_input = MArticuloInput(
-            **self.cambios.dict(exclude_unset=True),
+            **self.cambios.dict(exclude_unset=True,
+                                exclude={"meli_tipo_publicacion"}),
             available_quantity=self._cambio_cantidad(),
             pictures=self._obtener_imagenes(),
             attributes=self._obtener_atributos(ignore_default=True)
@@ -334,6 +335,16 @@ class ArticuloHandler(ItemHandler):
         else:
             return "Producto no modificado."
 
+    def _modificar_tipo_publicacion(self):
+        if "listing_type_id" in self.cambios.dict(exclude_unset=True):
+            self.session.put(
+                f'items/{self.old_image.meli_id["articulo"]}/listing_type',
+                json={'id': self.cambios.listing_type_id}
+            )
+            return "Tipo de publicacion modificado."
+        else:
+            return "Tipo de publicación sin modificar."
+
     def modificar(self) -> list[str]:
         logger.debug(f"{self.cambios = }")
         logger.debug(f"{self.old_image = }")
@@ -341,6 +352,58 @@ class ArticuloHandler(ItemHandler):
             respuestas = []
             respuestas.append(self._modificar_descripcion())
             respuestas.append(self._modificar_articulo())
+            respuestas.append(self._modificar_tipo_publicacion())
+            guardar_meli_error(
+                PK=self.cambios.PK or self.old_image.PK,
+                SK=self.cambios.SK or self.old_image.SK,
+                cause_msg=[]
+            )
+            return {
+                "statusCode": 201,
+                "body": ",".join(respuestas)
+            }
+        except MeliApiError as err:
+            if isinstance(err, MeliValidationError):
+                guardar_meli_error(
+                    PK=self.cambios.PK or self.old_image.PK,
+                    SK=self.cambios.SK or self.old_image.SK,
+                    cause_msg=err.error_message
+                )
+            return {
+                "statusCode": err.status_code,
+                "body": err.error_message
+            }
+
+    def _modificar_articulo_absoluto(self):
+        self.old_image.meli_id |= self._cargar_imagenes()
+        articulo_input = MArticuloInput(
+            **self.cambios.dict(by_alias=True,
+                                exclude_none=True),
+            available_quantity=self._calcular_stock(),
+            sale_terms=None,
+            pictures=[
+                {'id': img_id}
+                for img_id in self.old_image.meli_id['imagenes'].values()
+            ],
+            attributes=self._obtener_atributos(),
+            shipping=Shipping()
+        ).dict(exclude_none=True)
+        articulo_input.pop("listing_type_id")
+        logger.debug(articulo_input)
+        self.session.put(
+            f'items/{self.old_image.meli_id["articulo"]}',
+            json=articulo_input
+        )
+        return "Producto al sincronizado con DynamoDB"
+
+    def modificar_absoluto(self) -> list[str]:
+        logger.debug(f"{self.cambios = }")
+        try:
+            respuestas = []
+            respuestas.append(self._modificar_descripcion())
+            respuestas.append(self._modificar_articulo_absoluto())
+            respuestas.append(self._modificar_tipo_publicacion())
+            self.dynamo_guardar_meli_id()
             guardar_meli_error(
                 PK=self.cambios.PK or self.old_image.PK,
                 SK=self.cambios.SK or self.old_image.SK,
@@ -370,13 +433,20 @@ class ArticuloHandler(ItemHandler):
             ejecutadas.
         """
         if self.procesar:
-            respuesta = super().ejecutar("MercadoLibre",
-                                         self.old_image.meli_id)
+            if self.force_update and self.old_image.meli_id:
+                self.cambios = self.cambios.parse_obj(
+                    self.old_image.dict()
+                    | self.cambios.dict(exclude_unset=True)
+                )
+                respuesta = self.modificar_absoluto()
+            else:
+                respuesta = super().ejecutar("MercadoLibre",
+                                             self.old_image.meli_id)
         else:
             logger.info("El artículo no está habilitado para procesarse en "
                         "MercadoLibre.")
             respuesta = {
-                "statusCode": 401,
+                "statusCode": 400,
                 "body": "Articulo inhabilitado"
             }
 
