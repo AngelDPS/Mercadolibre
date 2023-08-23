@@ -277,6 +277,7 @@ class ArticuloHandler(ItemHandler):
             return "Descripción no modificada."
 
     def _obtener_imagenes(self):
+        # TODO: revisar que se actualice correctamente los IDs de las imágenes.
         urls_anexados = list(
             set(self.cambios.imagen_url) - set(self.old_image.imagen_url)
         )
@@ -313,37 +314,57 @@ class ArticuloHandler(ItemHandler):
         )))
 
         if stock_new != stock_old:
-            return stock_new
+            return stock_new, stock_old
         else:
-            return None
-
-    def _modificar_articulo(self):
-        articulo_input = MArticuloInput(
-            **self.cambios.dict(exclude_unset=True,
-                                exclude={"meli_tipo_publicacion"}),
-            available_quantity=self._cambio_cantidad(),
-            pictures=self._obtener_imagenes(),
-            attributes=self._obtener_atributos(ignore_default=True)
-        ).dict(exclude_none=True, exclude_unset=True)
-        logger.debug(articulo_input)
-        if articulo_input:
-            self.session.put(
-                f'items/{self.old_image.meli_id["articulo"]}',
-                json=articulo_input
-            )
-            return "Producto Modificado"
-        else:
-            return "Producto no modificado."
+            return None, None
 
     def _modificar_tipo_publicacion(self):
         if "listing_type_id" in self.cambios.dict(exclude_unset=True):
             self.session.put(
                 f'items/{self.old_image.meli_id["articulo"]}/listing_type',
-                json={'id': self.cambios.listing_type_id}
+                json={'id': self.cambios.meli_tipo_publicacion}
             )
             return "Tipo de publicacion modificado."
         else:
             return "Tipo de publicación sin modificar."
+
+    def _modificar_articulo(self):
+        stock_new, stock_old = self._cambio_cantidad()
+        articulo_input = MArticuloInput(
+            **self.cambios.dict(exclude_unset=True,
+                                exclude={"meli_tipo_publicacion"}),
+            available_quantity=stock_new,
+            pictures=self._obtener_imagenes(),
+            attributes=self._obtener_atributos(ignore_default=True)
+        ).dict(exclude_none=True, exclude_unset=True)
+        logger.debug(articulo_input)
+        response_text = ""
+        if articulo_input:
+            tipo_publicacion = (
+                self.cambios.dict(exclude_unset=True).get(
+                    "meli_tipo_publicacion"
+                )
+                or self.old_image.meli_tipo_publicacion
+            )
+            if articulo_input.get("available_quantity", 1) <= 0:
+                response_text = "Articulo deshabilitado por falta de stock. "
+                if tipo_publicacion == "free":
+                    articulo_input.pop("available_quantity")
+                    self.cambios.habilitado = Habilitado(0).name.lower()
+                    self._establecer_estatus()
+                else:
+                    articulo_input["available_quantity"] = 0
+            elif tipo_publicacion == "free" and (stock_old is not None
+                                                 and stock_old <= 0):
+                self.cambios.habilitado = Habilitado(1).name.lower()
+                self._establecer_estatus()
+            self.session.put(
+                f'items/{self.old_image.meli_id["articulo"]}',
+                json=articulo_input
+            )
+            return response_text + "Producto modificado."
+        else:
+            return "Producto no modificado."
 
     def modificar(self) -> list[str]:
         logger.debug(f"{self.cambios = }")
@@ -351,8 +372,8 @@ class ArticuloHandler(ItemHandler):
         try:
             respuestas = []
             respuestas.append(self._modificar_descripcion())
-            respuestas.append(self._modificar_articulo())
             respuestas.append(self._modificar_tipo_publicacion())
+            respuestas.append(self._modificar_articulo())
             guardar_meli_error(
                 PK=self.cambios.PK or self.old_image.PK,
                 SK=self.cambios.SK or self.old_image.SK,
@@ -388,21 +409,30 @@ class ArticuloHandler(ItemHandler):
             attributes=self._obtener_atributos(),
             shipping=Shipping()
         ).dict(exclude_none=True)
-        articulo_input.pop("listing_type_id")
         logger.debug(articulo_input)
+        response_text = ""
+        tipo_publicacion = articulo_input.pop("listing_type_id")
+        if articulo_input.get("available_quantity", 1) <= 0:
+            response_text = "Articulo deshabilitado por falta de stock. "
+            if tipo_publicacion == "free":
+                articulo_input.pop("available_quantity")
+                self.cambios.habilitado = Habilitado(0).name.lower()
+                self._establecer_estatus()
+            else:
+                articulo_input["available_quantity"] = 0
         self.session.put(
             f'items/{self.old_image.meli_id["articulo"]}',
             json=articulo_input
         )
-        return "Producto al sincronizado con DynamoDB"
+        return response_text + "Producto al sincronizado con DynamoDB"
 
     def modificar_absoluto(self) -> list[str]:
         logger.debug(f"{self.cambios = }")
         try:
             respuestas = []
             respuestas.append(self._modificar_descripcion())
-            respuestas.append(self._modificar_articulo_absoluto())
             respuestas.append(self._modificar_tipo_publicacion())
+            respuestas.append(self._modificar_articulo_absoluto())
             self.dynamo_guardar_meli_id()
             guardar_meli_error(
                 PK=self.cambios.PK or self.old_image.PK,
