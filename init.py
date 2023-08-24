@@ -7,7 +7,7 @@ from libs.util import filtro_campos_completos
 logger = Logger()
 
 
-@logger.inject_lambda_context(log_event=True)
+# @logger.inject_lambda_context(log_event=True)
 def lambda_handler(evento: list[dict],
                    context: Any) -> list[dict[str, str]]:
     """Manipulador de los eventos de entrada provenientes de

@@ -11,3 +11,6 @@ tests*
 *.json
 cargar_articulos_dynamo.py
 ejecutar_evento.py
+
+.python-version
+env310/
