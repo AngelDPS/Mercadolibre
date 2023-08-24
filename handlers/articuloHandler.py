@@ -277,15 +277,21 @@ class ArticuloHandler(ItemHandler):
             return "Descripción no modificada."
 
     def _obtener_imagenes(self):
-        # TODO: revisar que se actualice correctamente los IDs de las imágenes.
         urls_anexados = list(
             set(self.cambios.imagen_url) - set(self.old_image.imagen_url)
         )
+        urls_removidos = list(
+            set(self.old_image.imagen_url) - set(self.cambios.imagen_url)
+        )
+
         self.old_image.meli_id['imagenes'] |= {
             img: self._cargar_imagen(img)
             for img in urls_anexados
         }
+        for fname in urls_removidos:
+            del self.old_image.meli_id['imagenes'][fname]
         self.dynamo_guardar_meli_id()
+
         if "imagen_url" in self.cambios.dict(exclude_unset=True):
             return [
                 {'id': self.old_image.meli_id['imagenes'][fname]}
