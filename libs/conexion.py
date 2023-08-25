@@ -91,7 +91,8 @@ class MeliConexion(OAuth2Session):
                      f'\nHeaders:\n{response.headers}')
         try:
             response.raise_for_status()
-        except HTTPError as err:
+        except HTTPError:
+            error_msg = response.json().get('message')
             if (response.status_code == 400
                     and response.json().get("error") == "validation_error"):
                 error_msg = [cause.get("message")
@@ -100,6 +101,8 @@ class MeliConexion(OAuth2Session):
                 logger.error(error_msg)
                 raise MeliValidationError(error_msg)
             logger.error(
-                "Ocurrió un error con el servidor de MercadoLibre")
-            raise MeliRequestError(response.status_code, err)
+                "Ocurrió un error inesperado con MercadoLibre."
+                f"Error: {error_msg}"
+            )
+            raise MeliRequestError(response.status_code, error_msg)
         return response

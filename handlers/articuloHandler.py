@@ -84,13 +84,13 @@ class ArticuloHandler(ItemHandler):
                 self.cambios['precio'] = self.cambios[campo_precio]
             if ('habilitado' in self.cambios
                     or 'meli_habilitado' in self.cambios):
-                self.cambios['habilitado'] = Habilitado(
+                self.cambios['habilitado'] = Habilitado(bool(
                     self.cambios.get('habilitado',
                                      evento.old_image.get('habilitado')) and
                     self.cambios.get('meli_habilitado',
                                      evento.old_image.get('meli_habilitado')
                                      )
-                ).name.lower()
+                )).name.lower()
             if 'meli_tipo_publicacion' in self.cambios:
                 self.cambios['meli_tipo_publicacion'] = TipoPublicacion[
                     self.cambios['meli_tipo_publicacion'].upper()
@@ -102,10 +102,10 @@ class ArticuloHandler(ItemHandler):
             self.old_image = evento.old_image
             if self.old_image:
                 self.old_image['precio'] = self.old_image[campo_precio]
-                self.old_image['habilitado'] = Habilitado(
+                self.old_image['habilitado'] = Habilitado(bool(
                     self.old_image.get('habilitado') and
                     self.old_image.get('meli_habilitado')
-                ).name.lower()
+                )).name.lower()
                 self.old_image['meli_tipo_publicacion'] = TipoPublicacion[
                     self.old_image.get('meli_tipo_publicacion', 'free').upper()
                 ].value
