@@ -131,21 +131,11 @@ def filtro_campos_completos(evento):
     ]
 
     try:
-        ev = evento["Records"][0]
+        new_image = evento["Records"][0]["dynamodb"]["NewImage"]
     except IndexError:
-        ev = evento[0]
-
-    if ev.get("eventName") == "INSERT":
-        for key in filtro_campos:
-            if key not in ev["dynamodb"]["NewImage"]:
-                logger.error("El evento no contiene el campo " + key)
-                raise ValueError("El evento no contiene el campo " + key)
-    elif ev.get("eventName") == "MODIFY":
-        for key in filtro_campos:
-            if (key not in ev["dynamodb"]["NewImage"]
-                    or key not in ev["dynamodb"]["OldImage"]):
-                logger.error("El evento no contiene el campo " + key)
-                raise ValueError("El evento no contiene el campo " + key)
-    else:
-        logger.error("El evento no es válido", evento)
-        raise ValueError("El evento no es válido")
+        new_image = evento[0]["dynamodb"]["NewImage"]
+    for key in filtro_campos:
+        if key not in new_image:
+            msg = "El NewImage del evento no contiene el campo " + key
+            logger.error(msg)
+            raise ValueError(msg)
