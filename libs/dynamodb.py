@@ -90,3 +90,12 @@ def obtener_meli_client_credentials(codigo_compania: str,
         ProjectionExpression="meli.client"
     )
     return client['Item'].get("meli", {}).get("client", {})
+
+
+def obtener_articulo(codigo_compania: str, codigo_tienda: str,
+                     co_art: str) -> dict:
+    key = {
+        "PK": f"{codigo_compania.upper()}#",  # TODO: Armar el PK
+        "SK": "METADATA"
+    }
+    return obtener_tabla().get_item(Key=key)['Item']
