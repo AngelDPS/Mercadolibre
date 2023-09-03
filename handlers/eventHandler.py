@@ -1,7 +1,7 @@
 from boto3.dynamodb.types import TypeDeserializer
 from libs.util import ItemHandler
 from handlers.sqsHandler import obtener_records_en_cola
-from json import dumps
+# from json import dumps
 from aws_lambda_powertools import Logger
 
 logger = Logger(service="event_handler")
@@ -163,12 +163,13 @@ def procesar_todo(evento: list[dict],
             continue
 
         if isinstance(r[-1], dict) and r[-1].get("statusCode") >= 400:
-            if n == 0 and r[-1].get("statusCode") != 400:
-                sqs_queue.send_message(
-                    MessageBody=dumps(evento),
-                    MessageGroupId="ERROR_QUEUE",
-                    MessageDeduplicationId=record.contenido.get("eventID")
-                )
+            if n == 0:
+                raise Exception(r[-1]["body"])
+                # sqs_queue.send_message(
+                #     MessageBody=dumps(evento),
+                #     MessageGroupId="ERROR_QUEUE",
+                #     MessageDeduplicationId=record.contenido.get("eventID")
+                # )
             continue
         else:
             record.borrar_de_cola()
