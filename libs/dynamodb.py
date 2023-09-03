@@ -94,8 +94,20 @@ def obtener_meli_client_credentials(codigo_compania: str,
 
 def obtener_articulo(codigo_compania: str, codigo_tienda: str,
                      co_art: str) -> dict:
-    key = {
-        "PK": f"{codigo_compania.upper()}#",  # TODO: Armar el PK
-        "SK": "METADATA"
-    }
-    return obtener_tabla().get_item(Key=key)['Item']
+    PRIMARY_KEY = (
+        f"{codigo_compania.upper()}#{codigo_tienda.upper()}#{co_art.upper()}"
+    )
+    return obtener_tabla().get_item(
+        Key={"PK": PRIMARY_KEY, "SK": "METADATA"}
+    )['Item']
+
+
+def borrar_articulo_meli_id(codigo_compania: str, codigo_tienda: str,
+                            co_art: str):
+    PRIMARY_KEY = (
+        f"{codigo_compania.upper()}#{codigo_tienda.upper()}#{co_art.upper()}"
+    )
+    return obtener_tabla().update_item(
+        Key={"PK": PRIMARY_KEY, "SK": "METADATA"},
+        UpdateExpression="REMOVE meli_id"
+    )
