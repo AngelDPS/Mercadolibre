@@ -172,17 +172,21 @@ class ArticuloHandler(ItemHandler):
                 }}
 
     def _obtener_atributos(self, ignore_default: bool = False):
-        attr_from_entry = {
-            'GTIN': 'codigo_barra',
-            'SELLER_SKU': 'referencia',
-            'BRAND': 'marca',
-            'MODEL': 'modelo'
-        }
-        cambios_dict = self.cambios.dict(exclude_unset=ignore_default)
+        # attr_from_entry = {
+        #     'GTIN': 'codigo_barra',
+        #     'SELLER_SKU': 'referencia',
+        #     'BRAND': 'marca',
+        #     'MODEL': 'modelo'
+        # }
+        # cambios_dict = self.cambios.dict(exclude_unset=ignore_default)
+        # atributos = [
+        #     Attributes(id=id, value_name=cambios_dict.get(registro))
+        #     for id, registro in attr_from_entry.items()
+        #     if cambios_dict.get(registro) is not None
+        # ]
         atributos = [
-            Attributes(id=id, value_name=cambios_dict.get(registro))
-            for id, registro in attr_from_entry.items()
-            if cambios_dict.get(registro) is not None
+            Attributes(id=key, value_name=value)
+            for key, value in self.cambios.meli_parametros
         ]
         return atributos or None
 

@@ -19,12 +19,12 @@ class MArticulo(BaseModel):
     precio: Decimal | None = None
     stock_act: int | None = None
     stock_com: int | None = None
-    codigo_barra: str = "012345678905"
-    referencia: str = ""
-    marca: str = "N/A"
+    # codigo_barra: str = "012345678905"
+    # referencia: str = ""
+    # marca: str = "N/A"
     habilitado: bool | str = False
     imagen_url: list[str] | None = []
-    modelo: str = "N/A"
+    # modelo: str = "N/A"
     # cobra_impuesto: bool = Field(False, alias='taxable')
 
 
@@ -34,3 +34,4 @@ class MArticuloMeli(MArticulo):
     meli_tipo_publicacion: Literal["free", "bronze", "gold_special"] = "free"
     meli_stock_porcentaje: int = 100
     meli_id: dict[str, str | dict[str, str]] | None = {}
+    meli_parametros: dict = {}
