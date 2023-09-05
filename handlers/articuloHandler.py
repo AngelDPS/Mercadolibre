@@ -186,7 +186,7 @@ class ArticuloHandler(ItemHandler):
         # ]
         atributos = [
             Attributes(id=key, value_name=value)
-            for key, value in self.cambios.meli_parametros
+            for key, value in self.cambios.meli_parametros.items()
         ]
         return atributos or None
 
@@ -486,7 +486,7 @@ class ArticuloHandler(ItemHandler):
             logger.info("El artículo no está habilitado para procesarse en "
                         "MercadoLibre.")
             respuesta = {
-                "statusCode": 400,
+                "statusCode": 202,
                 "body": "Articulo inhabilitado"
             }
 
