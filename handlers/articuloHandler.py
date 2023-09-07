@@ -46,6 +46,8 @@ class TipoPublicacion(Enum):
     BRONZE = "bronze"
     BASICO = "bronze"
     BÁSICO = "bronze"
+    CLÁSICO = "bronze"
+    CLASICO = "bronze"
     GOLD_SPECIAL = "gold_special"
     PREMIUM = "gold_special"
 
@@ -330,7 +332,7 @@ class ArticuloHandler(ItemHandler):
 
     def _modificar_tipo_publicacion(self):
         if "listing_type_id" in self.cambios.dict(exclude_unset=True):
-            self.session.put(
+            self.session.post(
                 f'items/{self.old_image.meli_id["articulo"]}/listing_type',
                 json={'id': self.cambios.meli_tipo_publicacion}
             )

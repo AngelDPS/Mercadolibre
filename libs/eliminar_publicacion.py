@@ -1,7 +1,7 @@
 import json
-from dynamodb import obtener_articulo, borrar_articulo_meli_id
-from conexion import MeliConexion
-from exceptions import MeliApiError
+from libs.dynamodb import obtener_articulo, borrar_articulo_meli_id
+from libs.conexion import MeliConexion
+from libs.exceptions import MeliApiError
 
 
 def meli_eliminar_publicacion(input_data: str):
@@ -39,3 +39,26 @@ def meli_eliminar_publicacion(input_data: str):
             "statusCode": 400,
             "body": "Error inesperado."
         }
+
+
+if __name__ == "__main__":
+    from os import environ
+
+    environ["LOG_LEVEL"] = "DEBUG"
+    environ["POWERTOOLS_SERVICE_NAME"] = "meli"
+    environ["NOMBRE_COMPANIA"] = "angel"
+    environ["AWS_REGION"] = "us-east-2"
+    environ["SQSERROR_URL"] = (
+        "https://sqs.us-east-2.amazonaws.com/099375320271/AngelQueue.fifo"
+    )
+    environ["AWS_PROFILE_NAME"] = "angel"
+
+    input_data = """
+    {
+        "codigoCompania": "GENERICO2022",
+        "codigoTienda": "DLTVA",
+        "co_art": "ARRAN01"
+    }
+    """
+
+    meli_eliminar_publicacion(input_data)

@@ -1,7 +1,7 @@
 import json
-from dynamodb import obtener_articulo
-from conexion import MeliConexion
-from exceptions import MeliApiError
+from libs.dynamodb import obtener_articulo
+from libs.conexion import MeliConexion
+from libs.exceptions import MeliApiError
 from handlers.articuloHandler import TipoPublicacion
 
 
@@ -16,8 +16,8 @@ def meli_cambiar_tipo_pub(input_data: str):
             data["co_art"]
         )["meli_id"]["articulo"]
         session = MeliConexion(data["codigoCompania"], data["codigoTienda"])
-        session.put(f'items/{meli_id}/listing_type',
-                    json={'id': tipo_publicacion})
+        session.post(f'items/{meli_id}/listing_type',
+                     json={'id': tipo_publicacion})
         return {
             "statusCode": 200,
             "body": "Se cambió exitosamente en Mercadolibre la publicación de "
@@ -41,3 +41,27 @@ def meli_cambiar_tipo_pub(input_data: str):
             "statusCode": 400,
             "body": f"Ocrrió un error inesperado.\n{err}"
         }
+
+
+if __name__ == "__main__":
+    from os import environ
+
+    environ["LOG_LEVEL"] = "DEBUG"
+    environ["POWERTOOLS_SERVICE_NAME"] = "meli"
+    environ["NOMBRE_COMPANIA"] = "angel"
+    environ["AWS_REGION"] = "us-east-2"
+    environ["SQSERROR_URL"] = (
+        "https://sqs.us-east-2.amazonaws.com/099375320271/AngelQueue.fifo"
+    )
+    environ["AWS_PROFILE_NAME"] = "angel"
+
+    input_data = """
+    {
+        "codigoCompania": "GENERICO2022",
+        "codigoTienda": "DLTVA",
+        "co_art": "ARRAN01",
+        "tipo_publicacion": "clasico"
+    }
+    """
+
+    meli_cambiar_tipo_pub(input_data)
