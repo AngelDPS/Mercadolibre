@@ -443,7 +443,11 @@ class ArticuloHandler(ItemHandler):
         try:
             respuestas = []
             respuestas.append(self._modificar_descripcion())
-            respuestas.append(self._modificar_tipo_publicacion())
+            actual_listing_type = (
+                self.session.get(f'items/{self.old_image.meli_id["articulo"]}')
+            ).json().get('listing_type_id')
+            if actual_listing_type != self.cambios.meli_tipo_publicacion:
+                respuestas.append(self._modificar_tipo_publicacion())
             respuestas.append(self._modificar_articulo_absoluto())
             self.dynamo_guardar_meli_id()
             guardar_meli_error(
