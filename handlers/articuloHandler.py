@@ -288,7 +288,7 @@ class ArticuloHandler(ItemHandler):
         )
         urls_removidos = list(
             set(self.old_image.imagen_url) - set(self.cambios.imagen_url)
-        )
+        ) if "imagen_url" in self.cambios.dict(exclude_unset=True) else []
 
         self.old_image.meli_id['imagenes'] |= {
             img: self._cargar_imagen(img)
@@ -331,7 +331,7 @@ class ArticuloHandler(ItemHandler):
             return None, None
 
     def _modificar_tipo_publicacion(self):
-        if "listing_type_id" in self.cambios.dict(exclude_unset=True):
+        if "meli_tipo_publicacion" in self.cambios.dict(exclude_unset=True):
             self.session.post(
                 f'items/{self.old_image.meli_id["articulo"]}/listing_type',
                 json={'id': self.cambios.meli_tipo_publicacion}
